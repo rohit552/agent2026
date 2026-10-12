@@ -72,7 +72,7 @@ class _AuthScreenState extends State<AuthScreen> {
             const SizedBox(height:15),
             const Text('Profile type',style:TextStyle(fontWeight:FontWeight.w700,fontSize:11)),
             const SizedBox(height:7),
-            DropdownButtonFormField<String>(value:_role,decoration:const InputDecoration(border:OutlineInputBorder()),items:const [
+            DropdownButtonFormField<String>(initialValue:_role,decoration:const InputDecoration(border:OutlineInputBorder()),items:const [
               DropdownMenuItem(value:'STUDENT',child:Text('Student / learner')),
               DropdownMenuItem(value:'PARENT',child:Text('Parent / guardian')),
               DropdownMenuItem(value:'TEACHER',child:Text('Teacher / educator')),
@@ -96,7 +96,7 @@ class _AuthScreenState extends State<AuthScreen> {
           TextButton(onPressed:_busy?null:() => setState(() { _register = !_register; _message = ''; }),child:Text(_register?'Already have an account? Sign in':'New to SkillHeed? Create an account')),
           const SizedBox(height:3),
           const Text('Your data is transmitted to the configured SkillHeed API. Do not use production accounts until verification, recovery and privacy workflows are enabled.',textAlign:TextAlign.center,style:TextStyle(fontSize:9,height:1.6,color:Color(0xFF8A96A8))),
-        ]))),
+        ])))),
       )))),
     );
   }
