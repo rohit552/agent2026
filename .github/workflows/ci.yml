@@ -5,6 +5,9 @@ on:
     branches: [main, "feat/**"]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   node:
     runs-on: ubuntu-latest
@@ -13,7 +16,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
       - run: npm install
+      - run: npm run lint
       - run: npm run build
       - run: npm test
