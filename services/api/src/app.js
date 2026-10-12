@@ -20,7 +20,7 @@ app.use(cors({
     return callback(new Error("Origin is not allowed by CORS"));
   },
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
+  allowedHeaders: ["Content-Type", "Authorization", "X-SkillHeed-Profile-Id"]
 }));
 app.use(express.json({ limit: "100kb" }));
 app.use(pinoHttp({
