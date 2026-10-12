@@ -232,6 +232,8 @@ assessmentAnalyticsRouter.get("/overview", async (req, res, next) => {
     const attemptWhere = { assessmentId: { in: ids }, ...(Object.keys(validDateBounds(query)).length ? { startedAt: validDateBounds(query) } : {}) };
     const attempts = ids.length ? await prisma.assessmentAttempt.findMany({
       where: attemptWhere,
+      orderBy: { startedAt: "desc" },
+      take: 10000,
       select: { assessmentId: true, status: true, scoreEarned: true, scorePossible: true, startedAt: true }
     }) : [];
     const byAssessment = new Map();
@@ -245,6 +247,9 @@ assessmentAnalyticsRouter.get("/overview", async (req, res, next) => {
       return { ...assessment, metrics: summarizeAttempts(subset) };
     });
     const metrics = summarizeAttempts(attempts);
+    metrics.attemptsAnalyzed = attempts.length;
+    metrics.attemptSampleLimit = 10000;
+    metrics.attemptSampleLimitReached = attempts.length === 10000;
     metrics.totalAssessments = assessments.length;
     metrics.publishedAssessments = assessments.filter(item => item.status === "PUBLISHED").length;
     metrics.draftAssessments = assessments.filter(item => item.status === "DRAFT").length;
@@ -276,6 +281,8 @@ assessmentAnalyticsRouter.get("/classes/:classId", async (req, res, next) => {
     const ids = assessments.map(item => item.id);
     const attempts = ids.length ? await prisma.assessmentAttempt.findMany({
       where: { assessmentId: { in: ids } },
+      orderBy: { startedAt: "desc" },
+      take: 10000,
       select: { assessmentId: true, status: true, scoreEarned: true, scorePossible: true, startedAt: true }
     }) : [];
     const groups = new Map();
@@ -286,7 +293,7 @@ assessmentAnalyticsRouter.get("/classes/:classId", async (req, res, next) => {
     }
     return res.json({ data: {
       class: cls,
-      metrics: { ...summarizeAttempts(attempts), totalAssessments: assessments.length, publishedAssessments: assessments.filter(item => item.status === "PUBLISHED").length },
+      metrics: { ...summarizeAttempts(attempts), attemptsAnalyzed: attempts.length, attemptSampleLimit: 10000, attemptSampleLimitReached: attempts.length === 10000, totalAssessments: assessments.length, publishedAssessments: assessments.filter(item => item.status === "PUBLISHED").length },
       assessments: assessments.map(item => ({ ...item, metrics: summarizeAttempts(groups.get(item.id) ?? []) }))
     } });
   } catch (error) { return next(error); }
@@ -311,10 +318,11 @@ assessmentAnalyticsRouter.get("/assessments/:assessmentId", async (req, res, nex
       take: 500,
       select: { id: true, studentId: true, attemptNumber: true, status: true, startedAt: true, submittedAt: true, gradedAt: true, scoreEarned: true, scorePossible: true }
     });
-    const answerRows = await prisma.assessmentAnswer.findMany({
-      where: { attempt: { assessmentId: assessment.id }, questionId: { in: assessment.questions.map(question => question.id) } },
-      select: { questionId: true, isCorrect: true, pointsAwarded: true, manuallyGraded: true, answer: true }
-    });
+    const attemptIds = attempts.map(attempt => attempt.id);
+    const answerRows = attemptIds.length ? await prisma.assessmentAnswer.findMany({
+      where: { attemptId: { in: attemptIds }, questionId: { in: assessment.questions.map(question => question.id) } },
+      select: { questionId: true, isCorrect: true, pointsAwarded: true, manuallyGraded: true }
+    }) : [];
     const answeredByQuestion = new Map();
     for (const answer of answerRows) {
       const rows = answeredByQuestion.get(answer.questionId) ?? [];
