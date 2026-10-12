@@ -7,7 +7,7 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "test": "node --test",
-    "lint": "node --check src/server.js && node --check src/app.js && node --check src/routes/auth.js && node --check src/routes/leads.js && node --check src/routes/admin.js && node --check src/routes/admin-roles.js && node --check src/routes/profile-roles.js && node --check src/routes/education.js && node --check src/domain/profile-catalog.js && node --check src/middleware/auth.js && node --check src/routes/admin.test.js",
+    "lint": "node --check src/server.js && node --check src/app.js && node --check src/routes/auth.js && node --check src/routes/leads.js && node --check src/routes/admin.js && node --check src/routes/admin-roles.js && node --check src/routes/profile-roles.js && node --check src/routes/education.js && node --check src/routes/assessments.js && node --check src/domain/profile-catalog.js && node --check src/middleware/auth.js && node --check src/routes/admin.test.js",
     "db:generate": "prisma generate",
     "db:deploy": "prisma migrate deploy",
     "admin:bootstrap": "node scripts/bootstrap-admin.js"

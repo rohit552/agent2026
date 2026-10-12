@@ -110,11 +110,12 @@ class AuthService {
     final user = _normaliseUser(await _api.get('/api/v1/auth/me', token: token, profileId: profileId));
     final role = user['activeRole']?.toString() ?? user['role']?.toString() ?? 'STUDENT';
     if (!['STUDENT', 'TEACHER', 'INSTITUTION_ADMIN', 'PLATFORM_ADMIN', 'SUPER_ADMIN'].contains(role)) {
-      return {'classes': <dynamic>[], 'courses': <dynamic>[], 'attendance': <dynamic>[], 'activeRole': role};
+      return {'classes': <dynamic>[], 'courses': <dynamic>[], 'attendance': <dynamic>[], 'assessments': <dynamic>[], 'activeRole': role};
     }
 
     final classesResponse = await _api.get('/api/v1/education/classes', token: token, profileId: profileId);
     final coursesResponse = await _api.get('/api/v1/education/courses', token: token, profileId: profileId);
+    final assessmentsResponse = await _api.get('/api/v1/assessments', token: token, profileId: profileId);
     List<dynamic> attendance = <dynamic>[];
     if (role == 'STUDENT') {
       final attendanceResponse = await _api.get('/api/v1/education/me/attendance', token: token, profileId: profileId);
@@ -125,6 +126,7 @@ class AuthService {
       'classes': (Map<String, dynamic>.from(classesResponse['data'] as Map)['classes'] as List<dynamic>? ?? <dynamic>[]),
       'courses': (Map<String, dynamic>.from(coursesResponse['data'] as Map)['courses'] as List<dynamic>? ?? <dynamic>[]),
       'attendance': attendance,
+      'assessments': (Map<String, dynamic>.from(assessmentsResponse['data'] as Map)['assessments'] as List<dynamic>? ?? <dynamic>[]),
       'activeRole': role,
     };
   }
@@ -137,6 +139,38 @@ class AuthService {
     final data = Map<String, dynamic>.from(response['data'] as Map);
     final lessons = data['lessons'] as List<dynamic>? ?? <dynamic>[];
     return lessons.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+  }
+
+
+  Future<Map<String, dynamic>> startAssessment(String assessmentId) async {
+    final token = await _storage.read(key: _tokenKey);
+    if (token == null || token.isEmpty) throw const ApiException('Sign in to start an assessment', 401);
+    final profileId = await _storage.read(key: _profileKey);
+    final response = await _api.post('/api/v1/assessments/$assessmentId/attempts', const {}, token: token, profileId: profileId);
+    return Map<String, dynamic>.from(response['data'] as Map);
+  }
+
+  Future<void> saveAssessmentAnswer(String attemptId, String questionId, dynamic answer) async {
+    final token = await _storage.read(key: _tokenKey);
+    if (token == null || token.isEmpty) throw const ApiException('Sign in to save assessment answers', 401);
+    final profileId = await _storage.read(key: _profileKey);
+    await _api.post('/api/v1/assessments/attempts/$attemptId/answers/$questionId', {'answer': answer}, token: token, profileId: profileId);
+  }
+
+  Future<Map<String, dynamic>> submitAssessmentAttempt(String attemptId) async {
+    final token = await _storage.read(key: _tokenKey);
+    if (token == null || token.isEmpty) throw const ApiException('Sign in to submit an assessment', 401);
+    final profileId = await _storage.read(key: _profileKey);
+    final response = await _api.post('/api/v1/assessments/attempts/$attemptId/submit', const {}, token: token, profileId: profileId);
+    return Map<String, dynamic>.from(response['data'] as Map);
+  }
+
+  Future<Map<String, dynamic>> getAssessmentAttempt(String attemptId) async {
+    final token = await _storage.read(key: _tokenKey);
+    if (token == null || token.isEmpty) throw const ApiException('Sign in to view assessment results', 401);
+    final profileId = await _storage.read(key: _profileKey);
+    final response = await _api.get('/api/v1/assessments/attempts/$attemptId', token: token, profileId: profileId);
+    return Map<String, dynamic>.from(response['data'] as Map);
   }
 
   Future<void> logout() async {
