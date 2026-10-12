@@ -339,7 +339,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.class_outlined, color: Color(0xFF1769FF)),
-                    title: Text(item['name']?.toString() ?? 'Class', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w750)),
+                    title: Text(item['name']?.toString() ?? 'Class', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
                     subtitle: Text('${item['organization'] is Map ? item['organization']['name'] : ''} · ${item['academicYear'] ?? ''}', style: const TextStyle(fontSize: 9, color: Color(0xFF71829C))),
                   )),
                 ],
