@@ -178,3 +178,44 @@ The PostgreSQL-backed API integration test now exercises class creation, denial 
 
 ### Still not implemented in Education Core
 This slice does not yet contain live/video lesson streaming, binary file upload/storage, quizzes/question banks, assessment/proctoring, timetable/calendar, attendance correction approvals, term/grade/report-card calculations, HPC/NCrF competency records, fees/payments, parent access to student academic records, bulk CSV import, class CRUD/edit/archive UI, academic analytics, or automated course completion. Treat the current models and screens as the first usable foundation rather than a complete LMS.
+
+## Phase 4 — Assessment Core
+
+Assessment Core adds the first working quiz and exam-attempt lifecycle on top of the Education Core.
+
+### Models
+- `Assessment`: institution/branch/class assignment, title, description, instructions, draft/published/archived status, time limit and maximum attempts.
+- `AssessmentQuestion`: single-choice, multiple-choice, true/false and written-response questions with options, protected answer keys, points, required flag, ordering and explanation.
+- `AssessmentAttempt`: student, attempt number, in-progress/submitted/graded/expired lifecycle, deadline, score and grader.
+- `AssessmentAnswer`: per-question response, objective correctness, points awarded, teacher feedback and manual-grading state.
+
+### Assessment endpoints
+All routes are under `/api/v1/assessments` and require an authenticated profile.
+
+- `GET /` — list assessments within the selected profile's organization/class scope. Students get published assessments for classes/organizations in which they are actively enrolled.
+- `POST /` — create a draft assessment. Teachers must be assigned to the class; organization-wide assessments require an institution administrator.
+- `GET /:assessmentId` — assessment details. Answer keys and explanations are only returned to an authorized assessment manager.
+- `PATCH /:assessmentId/status` — publish/archive/return to draft. Only institution/platform administrators can publish, and the assessment must contain questions.
+- `POST /:assessmentId/questions` — add a validated question while the assessment is a draft.
+- `POST /:assessmentId/attempts` — start or resume a learner attempt, enforce active enrolment, limit attempts and establish the deadline.
+- `POST /attempts/:attemptId/answers/:questionId` — save a validated answer while the attempt is open.
+- `POST /attempts/:attemptId/submit` — validate required questions, auto-score objective questions and queue written responses for manual grading.
+- `GET /attempts/:attemptId` — read an attempt as its owner or an authorized manager; scores and correctness are hidden from a learner until grading is complete.
+- `GET /:assessmentId/attempts` — manager submissions list or the learner's own attempts.
+- `POST /attempts/:attemptId/grade` — grade each answered short-text response once, constrain points to the question maximum, and finalize the attempt.
+
+### Rules and grading
+- Single-choice questions accept exactly one option ID. Multiple-choice questions are auto-scored only when the submitted set exactly matches the configured answer set. True/false questions are automatically scored.
+- Short-text responses are manually graded. Submission remains `SUBMITTED` until all answered written questions have a valid grade.
+- Required items must be answered; required written responses must contain non-whitespace text. Optional unanswered items score zero.
+- The API does not send answer keys or explanations to learners while taking an assessment. After final grading, a learner can see their score, correctness and relevant explanation.
+- Assessment attempt deadlines are checked by the API when saving answers and submitting; client display is informational and does not control enforcement.
+- Attempt start uses a serializable PostgreSQL transaction and a unique attempt-number constraint to reduce race conditions. Conflicting concurrent starts return a retryable conflict.
+- Assessment, question, attempt start/submit and final grading events are written to the audit log.
+
+### UI
+- **Admin → Assessments:** create drafts, select organization/class, set time/attempt rules, author questions, publish/archive assessments, inspect submissions and manually grade written answers.
+- **Flutter learner dashboard:** lists published assessments, opens the attempt screen, saves choice/multiple-choice/true-false/written responses through the API, submits the attempt and refreshes the dashboard.
+
+### Current limits
+This is not a complete exam/proctoring suite yet. Question randomization is a stored assessment setting but is not applied to the learner question order in this release. The current attempt screen displays the expiry timestamp, while the API enforces the deadline; there is no synchronized live countdown yet. There is no webcam/screen proctoring, anti-cheat detection, negative marking, section-wise timer, question bank reuse, bulk import, question editing/removal after creation, review/appeal workflow, advanced psychometric/IQ scoring, offline attempt cache, or analytics/reporting dashboard. Add security and concurrency testing against staging before a real exam is scheduled.

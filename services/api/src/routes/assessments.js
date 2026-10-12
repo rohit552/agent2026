@@ -478,7 +478,14 @@ assessmentRouter.post("/attempts/:attemptId/submit", async (req, res, next) => {
   try {
     const attempt = await prisma.assessmentAttempt.findUnique({
       where: { id: req.params.attemptId },
-      include: { assessment: { include: { questions: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] } }, answers: true }
+      include: {
+        assessment: {
+          include: {
+            questions: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }
+          }
+        },
+        answers: true
+      }
     });
     if (!attempt) return notFound(res, "Attempt");
     if (attempt.studentId !== req.auth.userId || !student(req)) return forbidden(res, "This attempt does not belong to the selected student profile");
@@ -490,7 +497,13 @@ assessmentRouter.post("/attempts/:attemptId/submit", async (req, res, next) => {
       return res.status(409).json({ error: { code: "ATTEMPT_EXPIRED", message: "The assessment time limit has expired" } });
     }
     const answersByQuestion = new Map(attempt.answers.map(answer => [answer.questionId, answer]));
-    const missing = attempt.assessment.questions.filter(question => question.required && !answersByQuestion.has(question.id));
+    const missing = attempt.assessment.questions.filter(question => {
+      if (!question.required) return false;
+      const answer = answersByQuestion.get(question.id);
+      if (!answer) return true;
+      if (question.questionType === "SHORT_TEXT") return typeof answer.answer !== "string" || answer.answer.trim().length === 0;
+      return false;
+    });
     if (missing.length) return res.status(400).json({ error: { code: "REQUIRED_ANSWERS_MISSING", message: "Answer all required questions before submitting", questionIds: missing.map(q => q.id) } });
 
     const scoreUpdates = [];
@@ -517,10 +530,17 @@ assessmentRouter.post("/attempts/:attemptId/submit", async (req, res, next) => {
 
     const updatedAttempt = await prisma.$transaction(async tx => {
       for (const result of scoreUpdates) {
+        const answerData = {
+          isCorrect: result.isCorrect,
+          pointsAwarded: result.pointsAwarded,
+          manuallyGraded: result.manuallyGraded,
+          answeredAt: now,
+          ...(result.answer !== null ? { answer: result.answer } : {})
+        };
         await tx.assessmentAnswer.upsert({
           where: { attemptId_questionId: { attemptId: attempt.id, questionId: result.questionId } },
-          update: { isCorrect: result.isCorrect, pointsAwarded: result.pointsAwarded, manuallyGraded: result.manuallyGraded, answeredAt: now },
-          create: { attemptId: attempt.id, questionId: result.questionId, answer: result.answer, isCorrect: result.isCorrect, pointsAwarded: result.pointsAwarded, manuallyGraded: result.manuallyGraded, answeredAt: now }
+          update: answerData,
+          create: { attemptId: attempt.id, questionId: result.questionId, ...answerData }
         });
       }
       const savedAttempt = await tx.assessmentAttempt.update({

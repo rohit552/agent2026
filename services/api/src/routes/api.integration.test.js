@@ -199,7 +199,7 @@ test("registration, activation, session revocation and lead workflow", {
   });
   assert.equal(scopedEducationClassList.status, 403);
 
-  const countryCode = `CI-C-${suffix}`;
+  const countryCode = `CI-C-${suffix.slice(0, 12)}`;
   const country = await fetch(`${base}/api/v1/admin/territories`, {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
     body: JSON.stringify({ name: "CI Country", code: countryCode, level: "COUNTRY" })
@@ -210,11 +210,11 @@ test("registration, activation, session revocation and lead workflow", {
 
   const invalidDistrict = await fetch(`${base}/api/v1/admin/territories`, {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
-    body: JSON.stringify({ name: "CI District", code: `CI-D-${suffix}`, level: "DISTRICT" })
+    body: JSON.stringify({ name: "CI District", code: `CI-D-${suffix.slice(0, 12)}`, level: "DISTRICT" })
   });
   assert.equal(invalidDistrict.status, 400);
 
-  const zoneCode = `CI-Z-${suffix}`;
+  const zoneCode = `CI-Z-${suffix.slice(0, 12)}`;
   const zone = await fetch(`${base}/api/v1/admin/territories`, {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
     body: JSON.stringify({ name: "CI Zone", code: zoneCode, level: "ZONE", parentId: countryId })
@@ -224,7 +224,7 @@ test("registration, activation, session revocation and lead workflow", {
   territoryCodes.push(zoneCode);
   const zoneId = (await zone.json()).data.territory.id;
 
-  const stateCode = `CI-S-${suffix}`;
+  const stateCode = `CI-S-${suffix.slice(0, 12)}`;
   const stateResponse = await fetch(`${base}/api/v1/admin/territories`, {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
     body: JSON.stringify({ name: "CI State", code: stateCode, level: "STATE", parentId: zoneId })
@@ -233,7 +233,7 @@ test("registration, activation, session revocation and lead workflow", {
   territoryCodes.push(stateCode);
   const stateId = (await stateResponse.json()).data.territory.id;
 
-  const districtCode = `CI-D-${suffix}`;
+  const districtCode = `CI-D-${suffix.slice(0, 12)}`;
   const districtResponse = await fetch(`${base}/api/v1/admin/territories`, {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
     body: JSON.stringify({ name: "CI District", code: districtCode, level: "DISTRICT", parentId: stateId })
@@ -445,6 +445,13 @@ test("registration, activation, session revocation and lead workflow", {
     body: JSON.stringify({ answer: "b" })
   });
   assert.equal(answerChoice.status, 200);
+
+  const incompleteAssessmentSubmit = await fetch(`${base}/api/v1/assessments/attempts/${assessmentAttemptId}/submit`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId }
+  });
+  assert.equal(incompleteAssessmentSubmit.status, 400);
+  assert.equal((await incompleteAssessmentSubmit.json()).error.code, "REQUIRED_ANSWERS_MISSING");
 
   const answerWritten = await fetch(`${base}/api/v1/assessments/attempts/${assessmentAttemptId}/answers/${writtenQuestionId}`, {
     method: "POST",

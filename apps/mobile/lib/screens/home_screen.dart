@@ -98,6 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       if (returnedAttempt != null) {
         await _loadEducation();
+        if (!mounted) return;
         final message = returnedAttempt['status'] == 'GRADED'
             ? 'Assessment complete. Your score is available.'
             : 'Assessment submitted. Written responses may need teacher review.';
