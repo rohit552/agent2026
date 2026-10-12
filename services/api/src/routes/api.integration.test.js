@@ -21,6 +21,8 @@ test("registration, activation, session revocation and lead workflow", {
   let userId;
   let adminId;
   let leadId;
+  let organizationId;
+  const territoryCodes = [];
 
   t.after(async () => {
     try {
@@ -29,8 +31,10 @@ test("registration, activation, session revocation and lead workflow", {
       if (leadId) auditWhere.push({ entityId: leadId });
       if (auditWhere.length) await prisma.auditEvent.deleteMany({ where: { OR: auditWhere } });
       if (leadId) await prisma.lead.deleteMany({ where: { id: leadId } });
+      if (territoryCodes.length) await prisma.territory.deleteMany({ where: { code: { in: territoryCodes } } });
       if (adminId) await prisma.user.deleteMany({ where: { id: adminId } });
       if (userId) await prisma.user.deleteMany({ where: { id: userId } });
+      if (organizationId) await prisma.organization.deleteMany({ where: { id: organizationId } });
     } finally {
       await new Promise(resolve => server.close(resolve));
       await prisma.$disconnect();
@@ -100,6 +104,88 @@ test("registration, activation, session revocation and lead workflow", {
   });
   assert.equal(status.status, 200);
   assert.equal((await status.json()).data.lead.status, "QUALIFIED");
+
+
+  const catalogResponse = await fetch(`${base}/api/v1/profiles/catalog`);
+  assert.equal(catalogResponse.status, 200);
+  const catalog = (await catalogResponse.json()).data.profiles;
+  assert.equal(catalog.length, 70);
+  assert.ok(catalog.some(profile => profile.key === "SCHOOL_STUDENT"));
+  assert.ok(catalog.some(profile => profile.key === "FIELD_SALES_EXECUTIVE"));
+
+  const org = await prisma.organization.create({
+    data: { name: "CI Example School", slug: `ci-school-${suffix}`, type: "SCHOOL", status: "ACTIVE" }
+  });
+  organizationId = org.id;
+
+  const studentRole = await fetch(`${base}/api/v1/admin/users/${userId}/profile-roles`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ profileType: "SCHOOL_STUDENT", scopeType: "SELF", isDefault: true })
+  });
+  assert.equal(studentRole.status, 201);
+
+  const teacherRole = await fetch(`${base}/api/v1/admin/users/${userId}/profile-roles`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ profileType: "SCHOOL_TEACHER", scopeType: "ORGANIZATION", organizationId })
+  });
+  assert.equal(teacherRole.status, 201);
+  assert.equal((await teacherRole.json()).data.assignment.accessRole, "TEACHER");
+
+  const userRoles = await fetch(`${base}/api/v1/me/profile-roles`, {
+    headers: { Authorization: `Bearer ${session.accessToken}` }
+  });
+  assert.equal(userRoles.status, 200);
+  assert.equal((await userRoles.json()).data.assignments.length, 2);
+
+  const selectedProfile = await fetch(`${base}/api/v1/me/profile-roles`, {
+    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": (await teacherRole.clone().json()).data.assignment.id }
+  });
+  assert.equal(selectedProfile.status, 200);
+  assert.equal((await selectedProfile.json()).data.activeRole, "TEACHER");
+
+  const adminDeniedWithTeacherProfile = await fetch(`${base}/api/v1/admin/overview`, {
+    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": (await teacherRole.clone().json()).data.assignment.id }
+  });
+  assert.equal(adminDeniedWithTeacherProfile.status, 403);
+
+  const privilegedProfile = await fetch(`${base}/api/v1/admin/users/${userId}/profile-roles`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ profileType: "SUPER_ADMIN_PROFILE", scopeType: "SELF" })
+  });
+  assert.equal(privilegedProfile.status, 403);
+
+  const branchResponse = await fetch(`${base}/api/v1/admin/organizations/${organizationId}/branches`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ name: "CI North Branch", code: `N-${suffix.slice(0,8)}`, slug: `north-${suffix.slice(0,8)}` })
+  });
+  assert.equal(branchResponse.status, 201);
+
+  const countryCode = `CI-C-${suffix}`;
+  const country = await fetch(`${base}/api/v1/admin/territories`, {
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ name: "CI Country", code: countryCode, level: "COUNTRY" })
+  });
+  assert.equal(country.status, 201);
+  territoryCodes.push(countryCode);
+  const countryId = (await country.json()).data.territory.id;
+
+  const invalidDistrict = await fetch(`${base}/api/v1/admin/territories`, {
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ name: "CI District", code: `CI-D-${suffix}`, level: "DISTRICT" })
+  });
+  assert.equal(invalidDistrict.status, 400);
+
+  const zoneCode = `CI-Z-${suffix}`;
+  const zone = await fetch(`${base}/api/v1/admin/territories`, {
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ name: "CI Zone", code: zoneCode, level: "ZONE", parentId: countryId })
+  });
+  assert.equal(zone.status, 201);
+  territoryCodes.push(zoneCode);
 
   await prisma.user.update({ where: { id: userId }, data: { status: "SUSPENDED" } });
   const revoked = await fetch(`${base}/api/v1/auth/me`, { headers: { Authorization: `Bearer ${session.accessToken}` } });
