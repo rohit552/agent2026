@@ -195,7 +195,7 @@ test("registration, activation, session revocation and lead workflow", {
   assert.equal(foreignBranchAccess.status, 403);
 
   const scopedEducationClassList = await fetch(`${base}/api/v1/education/classes?organizationId=${otherOrganizationId}`, {
-    headers: { Authorization: `Bearer ${(await fetch(`${base}/api/v1/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: teacherEmail, password: "Teacher-strong-password-123" }) }).then(response => response.json())).data.accessToken}`, "X-SkillHeed-Profile-Id": teacherAssignmentId }
+    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": teacherAssignmentId }
   });
   assert.equal(scopedEducationClassList.status, 403);
 
