@@ -518,6 +518,15 @@ test("registration, activation, session revocation and lead workflow", {
   assert.equal(personalReport.status, 200);
   assert.equal((await personalReport.json()).data.attempts[0].scorePercent, 80);
 
+  const crossTenantAnalyticsDenied = await fetch(`${base}/api/v1/assessment-analytics/overview?organizationId=${otherOrganizationId}`, { headers: { Authorization: `Bearer ${teacherToken}`, "X-SkillHeed-Profile-Id": teacherProfileId } });
+  assert.equal(crossTenantAnalyticsDenied.status, 403);
+
+  const invertedAnalyticsDates = await fetch(`${base}/api/v1/assessment-analytics/overview?from=2026-10-20&to=2026-10-10`, { headers: { Authorization: `Bearer ${adminToken}` } });
+  assert.equal(invertedAnalyticsDates.status, 400);
+
+  const adminPersonalHistoryDenied = await fetch(`${base}/api/v1/assessment-analytics/me`, { headers: { Authorization: `Bearer ${adminToken}` } });
+  assert.equal(adminPersonalHistoryDenied.status, 403);
+
   const privateReportDenied = await fetch(`${base}/api/v1/assessment-analytics/assessments/${assessmentId}`, { headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId } });
   assert.equal(privateReportDenied.status, 403);
   await prisma.user.update({ where: { id: userId }, data: { status: "SUSPENDED" } });
