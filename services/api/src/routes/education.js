@@ -133,7 +133,12 @@ async function canViewCourse(req, course) {
   if (!course) return false;
   if (isGlobalAdmin(req)) return true;
   if (isInstitutionAdmin(req)) return profileMatchesOrganization(req, course.organizationId, course.branchId);
-  if (isTeacher(req)) return canManageCourse(req, course);
+  if (isTeacher(req)) {
+    if (await canManageCourse(req, course)) return true;
+    if (!course.classId) return false;
+    const cls = await prisma.academicClass.findUnique({ where: { id: course.classId } });
+    return canAccessClass(req, cls, { manage: true, allowStudent: false });
+  }
   if (isStudent(req) && course.status === "PUBLISHED") {
     if (course.classId) {
       return Boolean(await prisma.studentEnrollment.findFirst({
@@ -398,21 +403,22 @@ educationRouter.post("/courses", async (req, res, next) => {
     let cls = null;
     if (classId) {
       cls = await getClass(classId);
-      if (!cls || cls.organizationId !== organizationId || (branchId && cls.branchId && cls.branchId !== branchId)) {
+      if (!cls || cls.organizationId !== organizationId || (branchId !== undefined && branchId !== (cls.branchId ?? undefined))) {
         return res.status(400).json({ error: { code: "CLASS_SCOPE_MISMATCH", message: "Choose a class in the same organization and branch scope" } });
       }
       if (!await canManageClass(req, cls, { manage: true, allowStudent: false })) return sendForbidden(res, "You are not assigned to this class");
     } else if (!await canManageOrganization(req, organizationId, branchId ?? null)) {
       return sendForbidden(res, "Organization scope is required to create an organization-level course");
     }
-    if (branchId) {
-      const branch = await prisma.organizationBranch.findFirst({ where: { id: branchId, organizationId, status: "ACTIVE" }, select: { id: true } });
+    const effectiveBranchId = cls ? cls.branchId : (branchId ?? null);
+    if (effectiveBranchId) {
+      const branch = await prisma.organizationBranch.findFirst({ where: { id: effectiveBranchId, organizationId, status: "ACTIVE" }, select: { id: true } });
       if (!branch) return res.status(400).json({ error: { code: "BRANCH_SCOPE_MISMATCH", message: "Choose an active branch within the selected organization" } });
     }
     const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { id: true, status: true } });
     if (!organization || organization.status !== "ACTIVE") return res.status(400).json({ error: { code: "ORGANIZATION_INACTIVE", message: "Choose an active organization" } });
     const course = await prisma.course.create({
-      data: { ...fields, organizationId, branchId: branchId ?? null, classId: classId ?? null, createdById: req.auth.userId },
+      data: { ...fields, organizationId, branchId: effectiveBranchId, classId: classId ?? null, createdById: req.auth.userId },
       include: { academicClass: { select: { id: true, name: true, code: true } }, organization: { select: { id: true, name: true } } }
     });
     await prisma.auditEvent.create({ data: { actorId: req.auth.userId, action: "COURSE_CREATED", entityType: "Course", entityId: course.id, metadata: { organizationId, classId: classId ?? null }, ipAddress: req.ip, userAgent: req.get("user-agent")?.slice(0, 500) } });
@@ -444,9 +450,24 @@ educationRouter.get("/courses", async (req, res, next) => {
       if (classId && !assignedClassIds.includes(classId)) return sendForbidden(res, "This teacher is not assigned to the requested class");
       where = { organizationId: assignment.organizationId, ...(assignment.scopeType === "BRANCH" ? { branchId: assignment.branchId } : {}), classId: classId ? classId : { in: assignedClassIds } };
     } else if (isStudent(req)) {
-      const enrolledClassIds = (await prisma.studentEnrollment.findMany({ where: { studentId: req.auth.userId, status: "ACTIVE", ...(classId ? { classId } : {}) }, select: { classId: true, academicClass: { select: { organizationId: true } } } }));
-      const eligibleClassIds = enrolledClassIds.filter(item => !organizationId || item.academicClass.organizationId === organizationId).map(item => item.classId);
-      where = { status: "PUBLISHED", OR: [{ classId: { in: eligibleClassIds } }, { classId: null, ...(organizationId ? { organizationId } : {}) }] };
+      const enrollments = await prisma.studentEnrollment.findMany({
+        where: { studentId: req.auth.userId, status: "ACTIVE", ...(classId ? { classId } : {}) },
+        select: { classId: true, academicClass: { select: { organizationId: true } } }
+      });
+      if (classId && enrollments.length === 0) return sendForbidden(res, "You are not actively enrolled in the requested class");
+      const eligibleClassIds = enrollments.map(item => item.classId);
+      const allEnrollmentOrganizations = await prisma.studentEnrollment.findMany({
+        where: { studentId: req.auth.userId, status: "ACTIVE", ...(organizationId ? { academicClass: { organizationId } } : {}) },
+        select: { academicClass: { select: { organizationId: true } } }
+      });
+      const eligibleOrganizationIds = [...new Set(allEnrollmentOrganizations.map(item => item.academicClass.organizationId))];
+      where = {
+        status: "PUBLISHED",
+        OR: [
+          { classId: { in: eligibleClassIds } },
+          { classId: null, organizationId: { in: eligibleOrganizationIds } }
+        ]
+      };
     } else {
       return sendForbidden(res);
     }
