@@ -478,7 +478,14 @@ assessmentRouter.post("/attempts/:attemptId/submit", async (req, res, next) => {
   try {
     const attempt = await prisma.assessmentAttempt.findUnique({
       where: { id: req.params.attemptId },
-      include: { assessment: { include: { questions: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] } }, answers: true }
+      include: {
+        assessment: {
+          include: {
+            questions: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }
+          }
+        },
+        answers: true
+      }
     });
     if (!attempt) return notFound(res, "Attempt");
     if (attempt.studentId !== req.auth.userId || !student(req)) return forbidden(res, "This attempt does not belong to the selected student profile");
