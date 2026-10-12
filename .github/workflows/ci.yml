@@ -11,12 +11,53 @@ permissions:
 jobs:
   node:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: skillheed
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: skillheed
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U skillheed -d skillheed"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://skillheed:ci_password@localhost:5432/skillheed?schema=public
+      JWT_SECRET: ci_only_secret_do_not_use_in_production_32_chars_minimum
+      NODE_ENV: test
+      RUN_DB_INTEGRATION: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
       - run: npm install
+      - run: npm run db:generate
+      - run: npm run db:deploy
       - run: npm run lint
       - run: npm run build
       - run: npm test
+
+  flutter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Generate native Android project files
+        working-directory: apps/mobile
+        run: flutter create --platforms=android --project-name=skillheed_mobile --no-pub .
+      - name: Resolve mobile dependencies
+        working-directory: apps/mobile
+        run: flutter pub get
+      - name: Analyze Dart sources
+        working-directory: apps/mobile
+        run: flutter analyze lib
+      - name: Build debug APK
+        working-directory: apps/mobile
+        run: flutter build apk --debug --dart-define=SKILLHEED_API_URL=http://10.0.2.2:4000

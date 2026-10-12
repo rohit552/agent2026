@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/api_client.dart';
+import '../services/auth_service.dart';
+import 'auth_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -9,10 +11,17 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _api = ApiClient();
+  final _auth = AuthService();
   String _apiState = 'Checking API connection…';
+  Map<String, dynamic>? _currentUser;
+  bool _loadingProfile = true;
 
   @override
-  void initState() { super.initState(); _checkApi(); }
+  void initState() {
+    super.initState();
+    _checkApi();
+    _restoreSession();
+  }
 
   Future<void> _checkApi() async {
     try {
@@ -25,6 +34,69 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _restoreSession() async {
+    try {
+      final user = await _auth.currentUser();
+      if (!mounted) return;
+      setState(() { _currentUser = user; _loadingProfile = false; });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingProfile = false);
+    }
+  }
+
+  Future<void> _openAccount() async {
+    if (_currentUser == null) {
+      final user = await Navigator.of(context).push<Map<String, dynamic>>(
+        MaterialPageRoute(builder: (_) => const AuthScreen()),
+      );
+      if (!mounted) return;
+      if (user != null) setState(() => _currentUser = user);
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(child: Padding(
+        padding: const EdgeInsets.fromLTRB(22, 10, 22, 25),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_currentUser?['fullName']?.toString() ?? 'SkillHeed user', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 5),
+          Text(_currentUser?['email']?.toString() ?? '', style: const TextStyle(fontSize: 12, color: Color(0xFF687891))),
+          const SizedBox(height: 8),
+          Text('Role: ${_currentUser?['role'] ?? 'USER'}', style: const TextStyle(fontSize: 11, color: Color(0xFF687891))),
+          const SizedBox(height: 18),
+          OutlinedButton.icon(
+            onPressed: () async {
+              await _auth.logout();
+              if (!mounted || !sheetContext.mounted) return;
+              Navigator.of(sheetContext).pop();
+              setState(() => _currentUser = null);
+            },
+            icon: const Icon(Icons.logout),
+            label: const Text('Sign out'),
+          ),
+        ]),
+      )),
+    );
+  }
+
+  void _showInfo(BuildContext context, String title, String body) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.fromLTRB(22, 10, 22, 30),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 9),
+          Text(body, style: const TextStyle(fontSize: 13, height: 1.65, color: Color(0xFF687891))),
+        ]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final modules = [
@@ -35,52 +107,79 @@ class _HomeScreenState extends State<HomeScreen> {
       ('Olympiads & Quests','Join challenges and competitions',Icons.emoji_events_outlined,const Color(0xFFFFF5DF)),
       ('Sports & Talent','Showcase achievements and discover events',Icons.sports_soccer_outlined,const Color(0xFFE7FAFF)),
     ];
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFFF7FAFF),
         title: Row(children: [
-          Container(width:36,height:36,alignment:Alignment.center,decoration:BoxDecoration(color:const Color(0xFF1769FF),borderRadius:BorderRadius.circular(12)),
-            child: const Text('S',style:TextStyle(color:Colors.white,fontWeight:FontWeight.w800,fontSize:21))),
-          const SizedBox(width:10), const Text('SkillHeed',style:TextStyle(fontWeight:FontWeight.w800,letterSpacing:-.5)),
+          Container(
+            width: 36, height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: const Color(0xFF1769FF), borderRadius: BorderRadius.circular(12)),
+            child: const Text('S', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 21)),
+          ),
+          const SizedBox(width: 10),
+          const Text('SkillHeed', style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: -.5)),
         ]),
-        actions: [IconButton(onPressed:_checkApi,icon:const Icon(Icons.sync_rounded),tooltip:'Check API')],
+        actions: [
+          IconButton(onPressed: _checkApi, icon: const Icon(Icons.sync_rounded), tooltip: 'Check API'),
+          IconButton(onPressed: _openAccount, icon: Icon(_currentUser == null ? Icons.person_outline : Icons.account_circle_outlined), tooltip: _currentUser == null ? 'Sign in' : 'Account'),
+        ],
       ),
-      body: SafeArea(child: ListView(padding:const EdgeInsets.fromLTRB(20,18,20,30),children:[
-        Container(padding:const EdgeInsets.all(24),decoration:BoxDecoration(borderRadius:BorderRadius.circular(26),gradient:const LinearGradient(colors:[Color(0xFFEAF4FF),Color(0xFFD7E9FF)],begin:Alignment.topLeft,end:Alignment.bottomRight)),
-          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            const Text('YOUR GROWTH, CONNECTED',style:TextStyle(fontSize:10,letterSpacing:1,fontWeight:FontWeight.w800,color:Color(0xFF41628B))),
-            const SizedBox(height:15),
-            Text('One platform.\nInfinite possibilities.',style:Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight:FontWeight.w800,color:const Color(0xFF101D3A),height:1.12,letterSpacing:-1.2)),
-            const SizedBox(height:12),
-            const Text('Learning, skills, mentorship and career opportunities — all connected in one ecosystem.',style:TextStyle(fontSize:12,height:1.7,color:Color(0xFF536A88))),
-            const SizedBox(height:18),
-            FilledButton(onPressed:()=>_showInfo(context,'Create account','Connect this action to the registration endpoint and a verified email/OTP provider.'),child:const Text('Get started')),
-          ])),
-        const SizedBox(height:22),
-        Text('Explore SkillHeed',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.w800,color:const Color(0xFF101D3A))),
-        const SizedBox(height:12),
-        ...modules.map((m)=>Card(margin:const EdgeInsets.only(bottom:10),child:ListTile(contentPadding:const EdgeInsets.all(12),
-          leading:Container(width:47,height:47,decoration:BoxDecoration(color:m.$4,borderRadius:BorderRadius.circular(14)),child:Icon(m.$3,color:const Color(0xFF1769FF))),
-          title:Text(m.$1,style:const TextStyle(fontWeight:FontWeight.w800,fontSize:13)),
-          subtitle:Padding(padding:const EdgeInsets.only(top:5),child:Text(m.$2,style:const TextStyle(fontSize:11,height:1.5))),
-          trailing:const Icon(Icons.arrow_forward_ios_rounded,size:15),
-          onTap:()=>_showInfo(context,m.$1,'This module UI and protected API endpoints need to be implemented before enabling live actions.'),
-        ))),
-        const SizedBox(height:8),
-        Row(children:[Icon(_apiState=='API connected'?Icons.check_circle:Icons.info_outline,size:16,color:_apiState=='API connected'?Colors.green:Colors.blueGrey),const SizedBox(width:8),Expanded(child:Text(_apiState,style:const TextStyle(fontSize:10,color:Color(0xFF687891))))]),
-      ])),
-      bottomNavigationBar:NavigationBar(selectedIndex:0,destinations:const[
-        NavigationDestination(icon:Icon(Icons.home_outlined),selectedIcon:Icon(Icons.home),label:'Home'),
-        NavigationDestination(icon:Icon(Icons.explore_outlined),label:'Explore'),
-        NavigationDestination(icon:Icon(Icons.bookmark_border),label:'Saved'),
-        NavigationDestination(icon:Icon(Icons.person_outline),label:'Profile'),
-      ],onDestinationSelected:(i){if(i!=0)_showInfo(context,['Home','Explore','Saved','Profile'][i],'This destination is a planned screen; implement its navigation and API workflow before release.');}),
+      body: SafeArea(child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(26),
+              gradient: const LinearGradient(colors: [Color(0xFFEAF4FF), Color(0xFFD7E9FF)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('YOUR GROWTH, CONNECTED', style: TextStyle(fontSize: 10, letterSpacing: 1, fontWeight: FontWeight.w800, color: Color(0xFF41628B))),
+              const SizedBox(height: 15),
+              Text('One platform.\nInfinite possibilities.', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, color: const Color(0xFF101D3A), height: 1.12, letterSpacing: -1.2)),
+              const SizedBox(height: 12),
+              const Text('Learning, skills, mentorship and career opportunities — all connected in one ecosystem.', style: TextStyle(fontSize: 12, height: 1.7, color: Color(0xFF536A88))),
+              const SizedBox(height: 18),
+              FilledButton(onPressed: _currentUser == null ? _openAccount : () => _showInfo(context, 'Welcome to SkillHeed', 'Your account is connected. Your personalized learning dashboard will be enabled as product modules are released.'), child: Text(_currentUser == null ? 'Get started' : 'Welcome, ${_currentUser?['fullName']?.toString().split(' ').first ?? 'Learner'}')),
+            ]),
+          ),
+          const SizedBox(height: 22),
+          Text('Explore SkillHeed', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, color: const Color(0xFF101D3A))),
+          const SizedBox(height: 12),
+          ...modules.map((m) => Card(
+            margin: const EdgeInsets.only(bottom: 10),
+            child: ListTile(
+              contentPadding: const EdgeInsets.all(12),
+              leading: Container(width: 47, height: 47, decoration: BoxDecoration(color: m.$4, borderRadius: BorderRadius.circular(14)), child: Icon(m.$3, color: const Color(0xFF1769FF))),
+              title: Text(m.$1, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+              subtitle: Padding(padding: const EdgeInsets.only(top: 5), child: Text(m.$2, style: const TextStyle(fontSize: 11, height: 1.5))),
+              trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 15),
+              onTap: () => _showInfo(context, m.$1, 'This module UI and its protected API endpoints need to be implemented before enabling live actions.'),
+            ),
+          )),
+          const SizedBox(height: 8),
+          Row(children: [
+            Icon(_apiState == 'API connected' ? Icons.check_circle : Icons.info_outline, size: 16, color: _apiState == 'API connected' ? Colors.green : Colors.blueGrey),
+            const SizedBox(width: 8),
+            Expanded(child: Text(_loadingProfile ? 'Restoring secure session…' : _apiState, style: const TextStyle(fontSize: 10, color: Color(0xFF687891)))),
+          ]),
+        ],
+      )),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: 0,
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
+          NavigationDestination(icon: Icon(Icons.explore_outlined), label: 'Explore'),
+          NavigationDestination(icon: Icon(Icons.bookmark_border), label: 'Saved'),
+          NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profile'),
+        ],
+        onDestinationSelected: (index) {
+          if (index == 3) { _openAccount(); return; }
+          if (index != 0) _showInfo(context, ['Home','Explore','Saved','Profile'][index], 'This destination is a planned screen; implement the corresponding navigation and API workflow before release.');
+        },
+      ),
     );
-  }
-
-  void _showInfo(BuildContext context,String title,String body) {
-    showModalBottomSheet<void>(context:context,showDragHandle:true,builder:(context)=>Padding(padding:const EdgeInsets.fromLTRB(22,10,22,30),child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
-      Text(title,style:const TextStyle(fontSize:19,fontWeight:FontWeight.w800)),const SizedBox(height:9),Text(body,style:const TextStyle(fontSize:13,height:1.65,color:Color(0xFF687891)))
-    ])));
   }
 }
