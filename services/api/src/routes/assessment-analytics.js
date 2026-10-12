@@ -204,6 +204,16 @@ assessmentAnalyticsRouter.get("/overview", async (req, res, next) => {
       if (assignment.scopeType === "BRANCH") assessmentWhere.branchId = assignment.branchId;
     } else return forbidden(res);
 
+    if (query.classId) {
+      const selectedClass = await prisma.academicClass.findUnique({
+        where: { id: query.classId },
+        select: { id: true, organizationId: true, branchId: true }
+      });
+      if (!selectedClass) return notFound(res, "Class");
+      if (!globalAdmin(req) && institutionAdmin(req) && !await canReadClass(req, selectedClass)) return forbidden(res, "This profile cannot view analytics for the requested class");
+      if (!globalAdmin(req) && teacher(req) && !await canReadClass(req, selectedClass)) return forbidden(res, "This profile is not assigned to the requested class");
+    }
+
     const [assessments, classRows] = await Promise.all([
       prisma.assessment.findMany({
         where: assessmentWhere,
