@@ -352,8 +352,11 @@ educationRouter.post("/classes/:classId/attendance", async (req, res, next) => {
 
 educationRouter.get("/classes/:classId/attendance", async (req, res, next) => {
   const date = typeof req.query.date === "string" ? req.query.date : undefined;
-  if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || new Date(`${date}T00:00:00.000Z`).toISOString?.().slice(0, 10) !== date)) {
-    return res.status(400).json({ error: { code: "INVALID_DATE", message: "Use a valid YYYY-MM-DD date" } });
+  if (date) {
+    const candidate = /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T00:00:00.000Z`) : null;
+    if (!candidate || Number.isNaN(candidate.getTime()) || candidate.toISOString().slice(0, 10) !== date) {
+      return res.status(400).json({ error: { code: "INVALID_DATE", message: "Use a valid YYYY-MM-DD date" } });
+    }
   }
   try {
     const cls = await getClass(req.params.classId);
