@@ -497,7 +497,13 @@ assessmentRouter.post("/attempts/:attemptId/submit", async (req, res, next) => {
       return res.status(409).json({ error: { code: "ATTEMPT_EXPIRED", message: "The assessment time limit has expired" } });
     }
     const answersByQuestion = new Map(attempt.answers.map(answer => [answer.questionId, answer]));
-    const missing = attempt.assessment.questions.filter(question => question.required && !answersByQuestion.has(question.id));
+    const missing = attempt.assessment.questions.filter(question => {
+      if (!question.required) return false;
+      const answer = answersByQuestion.get(question.id);
+      if (!answer) return true;
+      if (question.questionType === "SHORT_TEXT") return typeof answer.answer !== "string" || answer.answer.trim().length === 0;
+      return false;
+    });
     if (missing.length) return res.status(400).json({ error: { code: "REQUIRED_ANSWERS_MISSING", message: "Answer all required questions before submitting", questionIds: missing.map(q => q.id) } });
 
     const scoreUpdates = [];
