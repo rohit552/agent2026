@@ -1,0 +1,28 @@
+{
+  "name": "skillheed-platform",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SkillHeed web, admin, API and shared platform foundation",
+  "workspaces": [
+    "apps/website",
+    "apps/admin",
+    "services/api"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n API,WEB,ADMIN -c blue,green,magenta \"npm:dev:api\" \"npm:dev:web\" \"npm:dev:admin\"",
+    "dev:api": "npm --workspace @skillheed/api run dev",
+    "dev:web": "npm --workspace @skillheed/website run dev",
+    "dev:admin": "npm --workspace @skillheed/admin run dev",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm --workspace @skillheed/api test",
+    "lint": "npm run lint --workspaces --if-present",
+    "db:generate": "npm --workspace @skillheed/api run db:generate",
+    "db:deploy": "npm --workspace @skillheed/api run db:deploy"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
