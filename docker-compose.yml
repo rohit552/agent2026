@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: skillheed
+      POSTGRES_USER: skillheed
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-skillheed_local_password}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - skillheed_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U skillheed -d skillheed"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  skillheed_pgdata:
