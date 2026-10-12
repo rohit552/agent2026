@@ -188,7 +188,7 @@ educationRouter.get("/classes", async (req, res, next) => {
         ...(assignment.scopeType === "BRANCH" ? { branchId: assignment.branchId } : {}),
         teachers: { some: { teacherId: req.auth.userId } }
       };
-      if (branchId && (assignment.scopeType !== "ORGANIZATION" || branchId !== assignment.branchId)) {
+      if (branchId && assignment.scopeType === "BRANCH" && branchId !== assignment.branchId) {
         return sendForbidden(res, "This profile cannot list another branch");
       }
     } else if (isStudent(req)) {
@@ -436,7 +436,8 @@ educationRouter.get("/courses", async (req, res, next) => {
         where: { teacherId: req.auth.userId, academicClass: { organizationId: assignment.organizationId, ...(assignment.scopeType === "BRANCH" ? { branchId: assignment.branchId } : {}) } },
         select: { classId: true }
       })).map(item => item.classId);
-      where = { organizationId: assignment.organizationId, ...(assignment.scopeType === "BRANCH" ? { branchId: assignment.branchId } : {}), ...(classId ? { classId } : { OR: [{ classId: null }, { classId: { in: assignedClassIds } }] }) };
+      if (classId && !assignedClassIds.includes(classId)) return sendForbidden(res, "This teacher is not assigned to the requested class");
+      where = { organizationId: assignment.organizationId, ...(assignment.scopeType === "BRANCH" ? { branchId: assignment.branchId } : {}), classId: classId ? classId : { in: assignedClassIds } };
     } else if (isStudent(req)) {
       const enrolledClassIds = (await prisma.studentEnrollment.findMany({ where: { studentId: req.auth.userId, status: "ACTIVE", ...(classId ? { classId } : {}) }, select: { classId: true, academicClass: { select: { organizationId: true } } } }));
       const eligibleClassIds = enrolledClassIds.filter(item => !organizationId || item.academicClass.organizationId === organizationId).map(item => item.classId);
