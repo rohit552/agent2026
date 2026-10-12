@@ -23,14 +23,18 @@ test("registration, activation, session revocation and lead workflow", {
   let leadId;
 
   t.after(async () => {
-    const auditWhere = [];
-    if (adminId) auditWhere.push({ actorId: adminId });
-    if (leadId) auditWhere.push({ entityId: leadId });
-    if (auditWhere.length) await prisma.auditEvent.deleteMany({ where: { OR: auditWhere } });
-    if (leadId) await prisma.lead.deleteMany({ where: { id: leadId } });
-    if (adminId) await prisma.user.deleteMany({ where: { id: adminId } });
-    if (userId) await prisma.user.deleteMany({ where: { id: userId } });
-    await new Promise(resolve => server.close(resolve));
+    try {
+      const auditWhere = [];
+      if (adminId) auditWhere.push({ actorId: adminId });
+      if (leadId) auditWhere.push({ entityId: leadId });
+      if (auditWhere.length) await prisma.auditEvent.deleteMany({ where: { OR: auditWhere } });
+      if (leadId) await prisma.lead.deleteMany({ where: { id: leadId } });
+      if (adminId) await prisma.user.deleteMany({ where: { id: adminId } });
+      if (userId) await prisma.user.deleteMany({ where: { id: userId } });
+    } finally {
+      await new Promise(resolve => server.close(resolve));
+      await prisma.$disconnect();
+    }
   });
 
   const register = await fetch(`${base}/api/v1/auth/register`, {
