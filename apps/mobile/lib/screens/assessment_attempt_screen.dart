@@ -139,18 +139,23 @@ class _AssessmentAttemptScreenState extends State<AssessmentAttemptScreen> {
         ]),
         if (question['required'] == true) const Padding(padding: EdgeInsets.only(top: 7), child: Text('Required', style: TextStyle(fontSize: 9, color: Color(0xFF1769FF), fontWeight: FontWeight.w700))),
         const SizedBox(height: 13),
-        if (type == 'SINGLE_CHOICE') ...options.map((option) {
-          final optionId = option['id']?.toString() ?? '';
-          return RadioListTile<String>(
-            value: optionId,
+        if (type == 'SINGLE_CHOICE')
+          RadioGroup<String>(
             groupValue: current is String ? current : null,
             onChanged: _submitting ? null : (value) { if (value != null) _setAnswer(id, value); },
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: Text(option['text']?.toString() ?? optionId, style: const TextStyle(fontSize: 11)),
-            visualDensity: VisualDensity.compact,
-          );
-        }),
+            child: Column(
+              children: options.map((option) {
+                final optionId = option['id']?.toString() ?? '';
+                return RadioListTile<String>(
+                  value: optionId,
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(option['text']?.toString() ?? optionId, style: const TextStyle(fontSize: 11)),
+                  visualDensity: VisualDensity.compact,
+                );
+              }).toList(),
+            ),
+          ),
         if (type == 'MULTIPLE_CHOICE') ...options.map((option) {
           final optionId = option['id']?.toString() ?? '';
           final currentValues = current is List ? current.map((value) => value.toString()).toList() : <String>[];
