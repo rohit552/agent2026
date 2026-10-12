@@ -8,6 +8,7 @@ const modules = [
   ["🏫", "Institutions", "institutions"],
   ["📥", "Website enquiries", "leads"],
   ["📚", "Learning", "learning"],
+  ["📝", "Assessments", "assessments"],
   ["↗", "Hire", "hire"],
   ["🤝", "Partners & sales", "partners"],
   ["⚙", "Operations", "operations"]
@@ -29,6 +30,15 @@ function App() {
   const [guardianLinks, setGuardianLinks] = useState([]);
   const [organizations, setOrganizations] = useState([]);
   const [classes, setClasses] = useState([]);
+  const [assessments, setAssessments] = useState([]);
+  const [selectedAssessment, setSelectedAssessment] = useState(null);
+  const [assessmentDetails, setAssessmentDetails] = useState(null);
+  const [assessmentAttempts, setAssessmentAttempts] = useState([]);
+  const [selectedAttemptDetail, setSelectedAttemptDetail] = useState(null);
+  const [assessmentError, setAssessmentError] = useState("");
+  const [assessmentCreateForm, setAssessmentCreateForm] = useState({ organizationId: "", classId: "", title: "", description: "", instructions: "", timeLimitSeconds: "900", maxAttempts: "1" });
+  const [questionForm, setQuestionForm] = useState({ prompt: "", questionType: "SINGLE_CHOICE", options: "a|Option A\nb|Option B", correctAnswers: "a", explanation: "", points: "1" });
+  const [manualGradeValues, setManualGradeValues] = useState({});
   const [classBranches, setClassBranches] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
   const [classRoster, setClassRoster] = useState([]);
@@ -57,7 +67,7 @@ function App() {
   const [busyId, setBusyId] = useState("");
 
   async function loadDashboard(accessToken) {
-    const [overviewRes, usersRes, leadsRes, orgsRes, catalogRes, territoriesRes, guardianRes, classesRes] = await Promise.all([
+    const [overviewRes, usersRes, leadsRes, orgsRes, catalogRes, territoriesRes, guardianRes, classesRes, assessmentsRes] = await Promise.all([
       apiRequest("/api/v1/admin/overview", { token: accessToken }),
       apiRequest("/api/v1/admin/users?page=1&pageSize=50", { token: accessToken }),
       apiRequest("/api/v1/leads?page=1&pageSize=50", { token: accessToken }),
@@ -65,7 +75,8 @@ function App() {
       apiRequest("/api/v1/admin/profile-catalog", { token: accessToken }),
       apiRequest("/api/v1/admin/territories?page=1&pageSize=100", { token: accessToken }),
       apiRequest("/api/v1/admin/guardian-links?page=1&pageSize=50", { token: accessToken }),
-      apiRequest("/api/v1/education/classes", { token: accessToken })
+      apiRequest("/api/v1/education/classes", { token: accessToken }),
+      apiRequest("/api/v1/assessments", { token: accessToken })
     ]);
     setOverview(overviewRes.data);
     setUsers(usersRes.data.users);
@@ -73,6 +84,7 @@ function App() {
     setGuardianLinks(guardianRes.data.links);
     setOrganizations(orgsRes.data.organizations);
     setClasses(classesRes.data.classes);
+    setAssessments(assessmentsRes.data.assessments);
     setProfileCatalog(catalogRes.data.profiles);
     setTerritories(territoriesRes.data.territories);
   }
@@ -372,6 +384,132 @@ function App() {
     }
   }
 
+
+  async function openAssessmentWorkspace(target) {
+    setSelectedAssessment(target);
+    setSelectedAttemptDetail(null);
+    setAssessmentError("");
+    try {
+      const [detail, attempts] = await Promise.all([
+        apiRequest(`/api/v1/assessments/${target.id}`, { token }),
+        apiRequest(`/api/v1/assessments/${target.id}/attempts`, { token })
+      ]);
+      setAssessmentDetails(detail.data.assessment);
+      setAssessmentAttempts(attempts.data.attempts);
+    } catch (err) {
+      setAssessmentError(err.message);
+    }
+  }
+
+  async function createAssessment(event) {
+    event.preventDefault();
+    setAssessmentError("");
+    try {
+      const selectedClassRecord = classes.find(item => item.id === assessmentCreateForm.classId);
+      const payload = {
+        organizationId: assessmentCreateForm.organizationId,
+        title: assessmentCreateForm.title,
+        description: assessmentCreateForm.description,
+        instructions: assessmentCreateForm.instructions,
+        maxAttempts: Math.max(1, Math.min(10, Number.parseInt(assessmentCreateForm.maxAttempts || "1", 10) || 1)),
+        ...(assessmentCreateForm.timeLimitSeconds ? { timeLimitSeconds: Number.parseInt(assessmentCreateForm.timeLimitSeconds, 10) } : {}),
+        ...(selectedClassRecord ? { classId: selectedClassRecord.id, ...(selectedClassRecord.branchId ? { branchId: selectedClassRecord.branchId } : {}) } : {})
+      };
+      const result = await apiRequest("/api/v1/assessments", { token, method: "POST", body: JSON.stringify(payload) });
+      setAssessmentCreateForm(current => ({ ...current, title: "", description: "", instructions: "" }));
+      await loadDashboard(token);
+      setActionMessage("Assessment created as a draft. Add questions before publishing.");
+      await openAssessmentWorkspace(result.data.assessment);
+    } catch (err) {
+      setAssessmentError(err.message);
+    }
+  }
+
+  async function addAssessmentQuestion(event) {
+    event.preventDefault();
+    if (!selectedAssessment || !assessmentDetails) return;
+    setAssessmentError("");
+    try {
+      const questionType = questionForm.questionType;
+      const options = ["SINGLE_CHOICE", "MULTIPLE_CHOICE"].includes(questionType)
+        ? questionForm.options.split("\n").map(line => {
+            const divider = line.indexOf("|");
+            if (divider < 1) return null;
+            return { id: line.slice(0, divider).trim(), text: line.slice(divider + 1).trim() };
+          }).filter(item => item && item.id && item.text)
+        : [];
+      const correctAnswers = ["SINGLE_CHOICE", "MULTIPLE_CHOICE"].includes(questionType)
+        ? questionForm.correctAnswers.split(",").map(value => value.trim()).filter(Boolean)
+        : questionType === "TRUE_FALSE" ? [questionForm.correctAnswers.trim().toLowerCase()] : [];
+      const payload = {
+        prompt: questionForm.prompt,
+        questionType,
+        options,
+        correctAnswers,
+        explanation: questionForm.explanation,
+        points: Math.max(.1, Number.parseFloat(questionForm.points || "1") || 1),
+        sortOrder: assessmentDetails.questions.length + 1
+      };
+      await apiRequest(`/api/v1/assessments/${selectedAssessment.id}/questions`, { token, method: "POST", body: JSON.stringify(payload) });
+      setQuestionForm(current => ({ ...current, prompt: "", explanation: "", points: "1" }));
+      await openAssessmentWorkspace(selectedAssessment);
+      setActionMessage("Question added to assessment.");
+    } catch (err) {
+      setAssessmentError(err.message);
+    }
+  }
+
+  async function changeAssessmentStatus(target, status) {
+    setAssessmentError("");
+    try {
+      await apiRequest(`/api/v1/assessments/${target.id}/status`, { token, method: "PATCH", body: JSON.stringify({ status }) });
+      await loadDashboard(token);
+      await openAssessmentWorkspace(target);
+      setActionMessage(`Assessment status changed to ${status}.`);
+    } catch (err) {
+      setAssessmentError(err.message);
+    }
+  }
+
+  async function openAssessmentAttempt(target) {
+    setAssessmentError("");
+    try {
+      const result = await apiRequest(`/api/v1/assessments/attempts/${target.id}`, { token });
+      setSelectedAttemptDetail(result.data);
+      const initial = {};
+      for (const answer of result.data.answers || []) {
+        if (answer.question?.questionType === "SHORT_TEXT" && typeof answer.answer === "string" && answer.answer.trim()) {
+          initial[answer.questionId] = { pointsAwarded: String(answer.pointsAwarded ?? 0), feedback: answer.feedback || "" };
+        }
+      }
+      setManualGradeValues(initial);
+    } catch (err) {
+      setAssessmentError(err.message);
+    }
+  }
+
+  async function submitManualAssessmentGrades(event) {
+    event.preventDefault();
+    if (!selectedAttemptDetail) return;
+    setAssessmentError("");
+    try {
+      const answers = (selectedAttemptDetail.answers || [])
+        .filter(answer => answer.question?.questionType === "SHORT_TEXT" && typeof answer.answer === "string" && answer.answer.trim())
+        .map(answer => ({
+          questionId: answer.questionId,
+          pointsAwarded: Number.parseFloat(manualGradeValues[answer.questionId]?.pointsAwarded ?? "0") || 0,
+          feedback: manualGradeValues[answer.questionId]?.feedback ?? ""
+        }));
+      await apiRequest(`/api/v1/assessments/attempts/${selectedAttemptDetail.attempt.id}/grade`, { token, method: "POST", body: JSON.stringify({ answers }) });
+      setActionMessage("Written responses graded.");
+      if (selectedAssessment) await openAssessmentWorkspace(selectedAssessment);
+      const refreshed = await apiRequest(`/api/v1/assessments/attempts/${selectedAttemptDetail.attempt.id}`, { token });
+      setSelectedAttemptDetail(refreshed.data);
+    } catch (err) {
+      setAssessmentError(err.message);
+    }
+  }
+
   async function updateUserStatus(target, status) {
     setBusyId(target.id); setActionMessage(""); setError("");
     try {
@@ -404,7 +542,7 @@ function App() {
 
   function signOut() {
     setToken(""); setUser(null); setPassword(""); setOverview(null);
-    setUsers([]); setLeads([]); setGuardianLinks([]); setOrganizations([]); setClasses([]); setSelectedClass(null); setClassRoster([]); setCourses([]); setSelectedCourse(null); setLessons([]); setProfileCatalog([]); setTerritories([]); setBranches([]); setSelectedRoleUser(null); setRoleAssignments([]); setView("overview"); setError(""); setActionMessage("");
+    setUsers([]); setLeads([]); setGuardianLinks([]); setOrganizations([]); setClasses([]); setAssessments([]); setSelectedAssessment(null); setAssessmentDetails(null); setAssessmentAttempts([]); setSelectedAttemptDetail(null); setSelectedClass(null); setClassRoster([]); setCourses([]); setSelectedCourse(null); setLessons([]); setProfileCatalog([]); setTerritories([]); setBranches([]); setSelectedRoleUser(null); setRoleAssignments([]); setView("overview"); setError(""); setActionMessage("");
   }
 
   const selectedProfile = profileCatalog.find(profile => profile.key === roleForm.profileType);
@@ -418,7 +556,7 @@ function App() {
       <header className="page-head"><div><span className="kicker">SKILLHEED OPERATIONS</span><h1>{view === "overview" ? `Good to see you, ${user.fullName?.split(" ")[0]}.` : modules.find(m => m[2] === view)?.[1] || "Workspace"}</h1><p>Secure operations workspace for SkillHeed platform administrators.</p></div><div className="header-actions"><span className="signed">● API session active</span><button className="secondary" onClick={() => loadDashboard(token).catch(e => setActionMessage(e.message))}>Refresh data</button><button className="secondary" onClick={signOut}>Sign out</button></div></header>
       <section className="notice"><b>Administrator access</b><span>Changes are checked by the API and important account/enquiry status changes are written to the audit log.</span></section>
       {actionMessage && <p className="action-message" role="status">{actionMessage}</p>}
-      {view === "overview" && <><section className="stat-grid"><article><span>Total users</span><strong>{overview?.users ?? "—"}</strong><small>Registered platform accounts</small></article><article><span>Active accounts</span><strong>{overview?.activeUsers ?? "—"}</strong><small>Accounts currently active</small></article><article><span>Pending verification</span><strong>{overview?.pendingUsers ?? "—"}</strong><small>Awaiting review or verification</small></article><article><span>Open enquiries</span><strong>{overview?.openLeads ?? "—"}</strong><small>{overview?.leads ?? "—"} total · {overview?.institutions ?? "—"} institutions</small></article></section><section className="modules"><div className="module-head"><div><h2>Management workspaces</h2><p>Use a workspace to review live records from the API.</p></div><span className="pill">Connected</span></div><div className="module-grid">{modules.map(([icon,name,key])=><button className="module-card" onClick={() => setView(key)} key={key}><div className="module-icon">{icon}</div><h3>{name}</h3><p>{({users:"Account records and activation workflow",institutions:"Registered organizations and branches",leads:"Website leads and follow-up status",learning:"Academic classes, student enrolments, teacher assignments, attendance and course delivery",hire:"Jobs and employers — upcoming integration",partners:"Partners and territory workflows — upcoming integration",operations:"Guardian/student link verification and operations workflows"})[key]}</p><span className={["users","institutions","leads","operations","learning"].includes(key)?"available":"planned"}>{["users","institutions","leads","operations","learning"].includes(key)?"API connected":"Integration planned"}</span></button>)}</div></section></>}
+      {view === "overview" && <><section className="stat-grid"><article><span>Total users</span><strong>{overview?.users ?? "—"}</strong><small>Registered platform accounts</small></article><article><span>Active accounts</span><strong>{overview?.activeUsers ?? "—"}</strong><small>Accounts currently active</small></article><article><span>Pending verification</span><strong>{overview?.pendingUsers ?? "—"}</strong><small>Awaiting review or verification</small></article><article><span>Open enquiries</span><strong>{overview?.openLeads ?? "—"}</strong><small>{overview?.leads ?? "—"} total · {overview?.institutions ?? "—"} institutions</small></article></section><section className="modules"><div className="module-head"><div><h2>Management workspaces</h2><p>Use a workspace to review live records from the API.</p></div><span className="pill">Connected</span></div><div className="module-grid">{modules.map(([icon,name,key])=><button className="module-card" onClick={() => setView(key)} key={key}><div className="module-icon">{icon}</div><h3>{name}</h3><p>{({users:"Account records and activation workflow",institutions:"Registered organizations and branches",leads:"Website leads and follow-up status",learning:"Academic classes, student enrolments, teacher assignments, attendance and course delivery",assessments:"Timed quizzes, answer-key protection, automatic scoring and written-response grading",hire:"Jobs and employers — upcoming integration",partners:"Partners and territory workflows — upcoming integration",operations:"Guardian/student link verification and operations workflows"})[key]}</p><span className={["users","institutions","leads","operations","learning","assessments"].includes(key)?"available":"planned"}>{["users","institutions","leads","operations","learning","assessments"].includes(key)?"API connected":"Integration planned"}</span></button>)}</div></section></>}
 
 
       {view === "learning" && <section className="data-panel education-panel">
@@ -478,7 +616,7 @@ function App() {
 
       {view === "operations" && <section className="data-panel"><div className="panel-head"><div><h2>Guardian / student link review</h2><p>Requests remain pending until an authorized review is completed. Approval and revocation are audited.</p></div><button className="secondary" onClick={() => loadDashboard(token).catch(e => setActionMessage(e.message))}>Reload</button></div><div className="table-wrap"><table><thead><tr><th>Parent / guardian</th><th>Student</th><th>Requested</th><th>Consent / status</th></tr></thead><tbody>{guardianLinks.map(link=><tr key={link.id}><td><strong>{link.guardian?.fullName || "Unknown guardian"}</strong><small>{link.guardian?.email || "—"}</small></td><td><strong>{link.student?.fullName || "Unknown student"}</strong><small>{link.student?.email || "—"}</small></td><td>{fmtDate(link.createdAt)}</td><td><select aria-label={"Guardian link status for "+(link.guardian?.fullName || "guardian")} value={link.status} disabled={busyId===link.id} onChange={event=>updateGuardianLinkStatus(link,event.target.value)}>{["PENDING","APPROVED","REVOKED"].map(status=><option key={status} value={status}>{status}</option>)}</select>{link.consentAt && <small className="consent-date">Approved {fmtDate(link.consentAt)}</small>}</td></tr>)}</tbody></table>{guardianLinks.length===0&&<p className="empty">There are no guardian/student link requests.</p>}</div></section>}
 
-      {!["overview","users","leads","institutions","operations","learning"].includes(view) && <section className="data-panel placeholder"><div className="module-icon">◈</div><h2>{modules.find(m=>m[2]===view)?.[1] || "Workspace"}</h2><p>This workspace is planned. Add its data model, authorization policies, CRUD API, tests and operational workflows before using it with live records.</p><button className="secondary" onClick={()=>setView("overview")}>Back to overview</button></section>}
+      {!["overview","users","leads","institutions","operations","learning","assessments"].includes(view) && <section className="data-panel placeholder"><div className="module-icon">◈</div><h2>{modules.find(m=>m[2]===view)?.[1] || "Workspace"}</h2><p>This workspace is planned. Add its data model, authorization policies, CRUD API, tests and operational workflows before using it with live records.</p><button className="secondary" onClick={()=>setView("overview")}>Back to overview</button></section>}
       <section className="security"><div><h3>Security and access</h3><p>The API validates the active account and role on each request. Keep secrets off the frontend, limit access to this admin hostname, and enable MFA before production launch.</p></div><span>RBAC</span></section>
     </main>
 
