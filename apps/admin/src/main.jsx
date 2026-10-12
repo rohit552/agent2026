@@ -28,6 +28,24 @@ function App() {
   const [leads, setLeads] = useState([]);
   const [guardianLinks, setGuardianLinks] = useState([]);
   const [organizations, setOrganizations] = useState([]);
+  const [classes, setClasses] = useState([]);
+  const [classBranches, setClassBranches] = useState([]);
+  const [selectedClass, setSelectedClass] = useState(null);
+  const [classRoster, setClassRoster] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [selectedCourse, setSelectedCourse] = useState(null);
+  const [lessons, setLessons] = useState([]);
+  const [educationError, setEducationError] = useState("");
+  const [classForm, setClassForm] = useState({ organizationId: "", branchId: "", name: "", code: "", gradeLevel: "", section: "", academicYear: "2026-27" });
+  const [enrollStudentId, setEnrollStudentId] = useState("");
+  const [assignTeacherId, setAssignTeacherId] = useState("");
+  const [newCourseTitle, setNewCourseTitle] = useState("");
+  const [newCourseDescription, setNewCourseDescription] = useState("");
+  const [newLessonTitle, setNewLessonTitle] = useState("");
+  const [newLessonText, setNewLessonText] = useState("");
+  const [newLessonPublished, setNewLessonPublished] = useState(false);
+  const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().slice(0, 10));
+  const [attendanceDefaultStatus, setAttendanceDefaultStatus] = useState("PRESENT");
   const [profileCatalog, setProfileCatalog] = useState([]);
   const [territories, setTerritories] = useState([]);
   const [branches, setBranches] = useState([]);
@@ -39,20 +57,22 @@ function App() {
   const [busyId, setBusyId] = useState("");
 
   async function loadDashboard(accessToken) {
-    const [overviewRes, usersRes, leadsRes, orgsRes, catalogRes, territoriesRes, guardianRes] = await Promise.all([
+    const [overviewRes, usersRes, leadsRes, orgsRes, catalogRes, territoriesRes, guardianRes, classesRes] = await Promise.all([
       apiRequest("/api/v1/admin/overview", { token: accessToken }),
       apiRequest("/api/v1/admin/users?page=1&pageSize=50", { token: accessToken }),
       apiRequest("/api/v1/leads?page=1&pageSize=50", { token: accessToken }),
       apiRequest("/api/v1/admin/organizations?page=1&pageSize=50", { token: accessToken }),
       apiRequest("/api/v1/admin/profile-catalog", { token: accessToken }),
       apiRequest("/api/v1/admin/territories?page=1&pageSize=100", { token: accessToken }),
-      apiRequest("/api/v1/admin/guardian-links?page=1&pageSize=50", { token: accessToken })
+      apiRequest("/api/v1/admin/guardian-links?page=1&pageSize=50", { token: accessToken }),
+      apiRequest("/api/v1/education/classes", { token: accessToken })
     ]);
     setOverview(overviewRes.data);
     setUsers(usersRes.data.users);
     setLeads(leadsRes.data.leads);
     setGuardianLinks(guardianRes.data.links);
     setOrganizations(orgsRes.data.organizations);
+    setClasses(classesRes.data.classes);
     setProfileCatalog(catalogRes.data.profiles);
     setTerritories(territoriesRes.data.territories);
   }
@@ -160,6 +180,198 @@ function App() {
     }
   }
 
+
+  async function refreshClassWorkspace(target = selectedClass) {
+    if (!target) return;
+    setEducationError("");
+    try {
+      const [rosterRes, courseRes] = await Promise.all([
+        apiRequest(`/api/v1/education/classes/${target.id}/roster`, { token }),
+        apiRequest(`/api/v1/education/courses?organizationId=${encodeURIComponent(target.organizationId)}&classId=${encodeURIComponent(target.id)}`, { token })
+      ]);
+      setClassRoster(rosterRes.data.students);
+      setCourses(courseRes.data.courses);
+      if (selectedCourse) {
+        const matching = courseRes.data.courses.find(item => item.id === selectedCourse.id);
+        if (matching) {
+          setSelectedCourse(matching);
+          const lessonRes = await apiRequest(`/api/v1/education/courses/${matching.id}/lessons`, { token });
+          setLessons(lessonRes.data.lessons);
+        } else {
+          setSelectedCourse(null);
+          setLessons([]);
+        }
+      }
+    } catch (err) {
+      setEducationError(err.message);
+    }
+  }
+
+  async function openClassWorkspace(target) {
+    setSelectedClass(target);
+    setSelectedCourse(null);
+    setLessons([]);
+    setClassRoster([]);
+    setCourses([]);
+    setEducationError("");
+    try {
+      const [rosterRes, courseRes] = await Promise.all([
+        apiRequest(`/api/v1/education/classes/${target.id}/roster`, { token }),
+        apiRequest(`/api/v1/education/courses?organizationId=${encodeURIComponent(target.organizationId)}&classId=${encodeURIComponent(target.id)}`, { token })
+      ]);
+      setClassRoster(rosterRes.data.students);
+      setCourses(courseRes.data.courses);
+    } catch (err) {
+      setEducationError(err.message);
+    }
+  }
+
+  async function selectClassOrganization(organizationId) {
+    setClassForm(current => ({ ...current, organizationId, branchId: "" }));
+    setClassBranches([]);
+    if (!organizationId) return;
+    try {
+      const result = await apiRequest(`/api/v1/admin/organizations/${organizationId}/branches`, { token });
+      setClassBranches(result.data.branches);
+    } catch (err) {
+      setEducationError(err.message);
+    }
+  }
+
+  async function createAcademicClass(event) {
+    event.preventDefault();
+    setEducationError("");
+    try {
+      const payload = {
+        organizationId: classForm.organizationId,
+        name: classForm.name,
+        code: classForm.code,
+        academicYear: classForm.academicYear,
+        ...(classForm.branchId ? { branchId: classForm.branchId } : {}),
+        ...(classForm.gradeLevel ? { gradeLevel: classForm.gradeLevel } : {}),
+        ...(classForm.section ? { section: classForm.section } : {})
+      };
+      const result = await apiRequest("/api/v1/education/classes", { token, method: "POST", body: JSON.stringify(payload) });
+      const created = result.data.class;
+      setClassForm(current => ({ ...current, name: "", code: "", gradeLevel: "", section: "" }));
+      await loadDashboard(token);
+      setActionMessage(`Class ${created.name} created.`);
+      await openClassWorkspace(created);
+    } catch (err) {
+      setEducationError(err.message);
+    }
+  }
+
+  async function enrollStudent(event) {
+    event.preventDefault();
+    if (!selectedClass || !enrollStudentId) return;
+    setEducationError("");
+    try {
+      await apiRequest(`/api/v1/education/classes/${selectedClass.id}/enrollments`, { token, method: "POST", body: JSON.stringify({ studentId: enrollStudentId }) });
+      setEnrollStudentId("");
+      await refreshClassWorkspace(selectedClass);
+      await loadDashboard(token);
+      setActionMessage("Student enrolled in class.");
+    } catch (err) {
+      setEducationError(err.message);
+    }
+  }
+
+  async function assignClassTeacher(event) {
+    event.preventDefault();
+    if (!selectedClass || !assignTeacherId) return;
+    setEducationError("");
+    try {
+      await apiRequest(`/api/v1/education/classes/${selectedClass.id}/teachers`, { token, method: "POST", body: JSON.stringify({ teacherId: assignTeacherId }) });
+      setAssignTeacherId("");
+      await loadDashboard(token);
+      await refreshClassWorkspace(selectedClass);
+      setActionMessage("Teacher assigned to class.");
+    } catch (err) {
+      setEducationError(err.message);
+    }
+  }
+
+  async function markClassAttendance(event) {
+    event.preventDefault();
+    if (!selectedClass || classRoster.length === 0) return;
+    setEducationError("");
+    try {
+      const entries = classRoster.map(enrollment => ({ studentId: enrollment.student.id, status: attendanceDefaultStatus }));
+      await apiRequest(`/api/v1/education/classes/${selectedClass.id}/attendance`, { token, method: "POST", body: JSON.stringify({ date: attendanceDate, entries }) });
+      setActionMessage(`Attendance saved for ${entries.length} students on ${attendanceDate}.`);
+    } catch (err) {
+      setEducationError(err.message);
+    }
+  }
+
+  async function createClassCourse(event) {
+    event.preventDefault();
+    if (!selectedClass) return;
+    setEducationError("");
+    try {
+      const payload = {
+        organizationId: selectedClass.organizationId,
+        classId: selectedClass.id,
+        title: newCourseTitle,
+        description: newCourseDescription,
+        ...(selectedClass.branchId ? { branchId: selectedClass.branchId } : {})
+      };
+      const result = await apiRequest("/api/v1/education/courses", { token, method: "POST", body: JSON.stringify(payload) });
+      setNewCourseTitle("");
+      setNewCourseDescription("");
+      await refreshClassWorkspace(selectedClass);
+      setSelectedCourse(result.data.course);
+      setLessons([]);
+      setActionMessage("Course created as a draft. Publish it after content review.");
+    } catch (err) {
+      setEducationError(err.message);
+    }
+  }
+
+  async function openCourseLessons(course) {
+    setSelectedCourse(course);
+    setEducationError("");
+    try {
+      const result = await apiRequest(`/api/v1/education/courses/${course.id}/lessons`, { token });
+      setLessons(result.data.lessons);
+    } catch (err) {
+      setEducationError(err.message);
+    }
+  }
+
+  async function updateCourseStatus(course, status) {
+    setEducationError("");
+    try {
+      const result = await apiRequest(`/api/v1/education/courses/${course.id}/status`, { token, method: "PATCH", body: JSON.stringify({ status }) });
+      setCourses(current => current.map(item => item.id === course.id ? result.data.course : item));
+      setSelectedCourse(result.data.course);
+      await openCourseLessons(result.data.course);
+      setActionMessage(`Course status changed to ${status}.`);
+    } catch (err) {
+      setEducationError(err.message);
+    }
+  }
+
+  async function createCourseLesson(event) {
+    event.preventDefault();
+    if (!selectedCourse) return;
+    setEducationError("");
+    try {
+      const result = await apiRequest(`/api/v1/education/courses/${selectedCourse.id}/lessons`, {
+        token, method: "POST",
+        body: JSON.stringify({ title: newLessonTitle, contentType: "TEXT", contentText: newLessonText, sortOrder: lessons.length + 1, published: newLessonPublished })
+      });
+      setLessons(current => [...current, result.data.lesson].sort((a, b) => a.sortOrder - b.sortOrder));
+      setNewLessonTitle("");
+      setNewLessonText("");
+      setNewLessonPublished(false);
+      setActionMessage("Lesson added to course.");
+    } catch (err) {
+      setEducationError(err.message);
+    }
+  }
+
   async function updateUserStatus(target, status) {
     setBusyId(target.id); setActionMessage(""); setError("");
     try {
@@ -192,7 +404,7 @@ function App() {
 
   function signOut() {
     setToken(""); setUser(null); setPassword(""); setOverview(null);
-    setUsers([]); setLeads([]); setGuardianLinks([]); setOrganizations([]); setProfileCatalog([]); setTerritories([]); setBranches([]); setSelectedRoleUser(null); setRoleAssignments([]); setView("overview"); setError(""); setActionMessage("");
+    setUsers([]); setLeads([]); setGuardianLinks([]); setOrganizations([]); setClasses([]); setSelectedClass(null); setClassRoster([]); setCourses([]); setSelectedCourse(null); setLessons([]); setProfileCatalog([]); setTerritories([]); setBranches([]); setSelectedRoleUser(null); setRoleAssignments([]); setView("overview"); setError(""); setActionMessage("");
   }
 
   const selectedProfile = profileCatalog.find(profile => profile.key === roleForm.profileType);
@@ -208,6 +420,55 @@ function App() {
       {actionMessage && <p className="action-message" role="status">{actionMessage}</p>}
       {view === "overview" && <><section className="stat-grid"><article><span>Total users</span><strong>{overview?.users ?? "—"}</strong><small>Registered platform accounts</small></article><article><span>Active accounts</span><strong>{overview?.activeUsers ?? "—"}</strong><small>Accounts currently active</small></article><article><span>Pending verification</span><strong>{overview?.pendingUsers ?? "—"}</strong><small>Awaiting review or verification</small></article><article><span>Open enquiries</span><strong>{overview?.openLeads ?? "—"}</strong><small>{overview?.leads ?? "—"} total · {overview?.institutions ?? "—"} institutions</small></article></section><section className="modules"><div className="module-head"><div><h2>Management workspaces</h2><p>Use a workspace to review live records from the API.</p></div><span className="pill">Connected</span></div><div className="module-grid">{modules.map(([icon,name,key])=><button className="module-card" onClick={() => setView(key)} key={key}><div className="module-icon">{icon}</div><h3>{name}</h3><p>{({users:"Account records and activation workflow",institutions:"Registered organizations and branches",leads:"Website leads and follow-up status",learning:"Courses and assessments — upcoming integration",hire:"Jobs and employers — upcoming integration",partners:"Partners and territory workflows — upcoming integration",operations:"Guardian/student link verification and operations workflows"})[key]}</p><span className={["users","institutions","leads","operations"].includes(key)?"available":"planned"}>{["users","institutions","leads","operations"].includes(key)?"API connected":"Integration planned"}</span></button>)}</div></section></>}
 
+
+      {view === "learning" && <section className="data-panel education-panel">
+        <div className="panel-head"><div><h2>Education core</h2><p>Manage academic classes, teacher assignments, student enrolments, attendance and draft courses.</p></div><button className="secondary" onClick={() => loadDashboard(token).catch(err => setEducationError(err.message))}>Refresh data</button></div>
+        <div className="education-intro"><strong>${classes.length} classes</strong><span>·</span><strong>${organizations.filter(org => org.status === "ACTIVE").length} active institutions</strong><span>·</span><strong>Academic year-based records</strong></div>
+        <form className="edu-create-class" onSubmit={createAcademicClass}>
+          <h3>Create academic class</h3>
+          <div className="edu-form-grid">
+            <label>Institution<select required value={classForm.organizationId} onChange={event => selectClassOrganization(event.target.value)}><option value="">Select an active institution</option>{organizations.filter(org => org.status === "ACTIVE").map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label>
+            <label>Branch (optional)<select value={classForm.branchId} onChange={event => setClassForm(current => ({ ...current, branchId: event.target.value }))}><option value="">Organization-wide</option>{classBranches.map(branch => <option key={branch.id} value={branch.id}>{branch.name} · {branch.code}</option>)}</select></label>
+            <label>Class name<input required minLength="2" maxLength="120" value={classForm.name} onChange={event => setClassForm(current => ({ ...current, name: event.target.value }))} placeholder="Class 8 - A"/></label>
+            <label>Class code<input required minLength="2" maxLength="40" value={classForm.code} onChange={event => setClassForm(current => ({ ...current, code: event.target.value }))} placeholder="CLS-08-A"/></label>
+            <label>Grade / level<input maxLength="32" value={classForm.gradeLevel} onChange={event => setClassForm(current => ({ ...current, gradeLevel: event.target.value }))} placeholder="8 / Foundation / Batch 1"/></label>
+            <label>Section<input maxLength="32" value={classForm.section} onChange={event => setClassForm(current => ({ ...current, section: event.target.value }))} placeholder="A"/></label>
+            <label>Academic year<input required minLength="4" maxLength="20" value={classForm.academicYear} onChange={event => setClassForm(current => ({ ...current, academicYear: event.target.value }))} placeholder="2026-27"/></label>
+          </div>
+          <button className="primary-action" type="submit">Create class</button>
+        </form>
+        {educationError && <p className="education-error" role="alert">{educationError}</p>}
+        <div className="education-layout">
+          <section className="education-list"><div className="subpanel-head"><h3>Academic classes</h3><span>{classes.length} shown</span></div>
+            {classes.length === 0 && <p className="empty">No classes yet. Select an active institution above and create your first class.</p>}
+            {classes.map(cls => <button className={"class-item "+(selectedClass?.id===cls.id?"selected":"")} onClick={() => openClassWorkspace(cls)} key={cls.id}>
+              <span className="class-symbol">▦</span><span className="class-copy"><strong>{cls.name}</strong><small>{cls.organization?.name || "Institution"}{cls.branch ? " · "+cls.branch.name : ""} · {cls.academicYear}</small><small>{cls.gradeLevel ? "Grade "+cls.gradeLevel : "General"}{cls.section ? " · Section "+cls.section : ""} · {cls._count?.enrollments ?? 0} enrolments</small></span><span className="class-open">›</span>
+            </button>)}
+          </section>
+          <section className="education-workspace">
+            {!selectedClass ? <div className="workspace-empty"><span>◎</span><h3>Select a class to manage it</h3><p>Choose a class from the list to enrol students, assign teachers, mark attendance and manage courses.</p></div> : <>
+              <div className="subpanel-head"><div><span className="kicker">CLASS WORKSPACE</span><h3>{selectedClass.name}</h3><p>{selectedClass.organization?.name || organizations.find(org => org.id === selectedClass.organizationId)?.name} · {selectedClass.academicYear}</p></div><button className="secondary" onClick={() => refreshClassWorkspace(selectedClass)}>Reload</button></div>
+              <div className="edu-mini-stats"><span><b>{classRoster.length}</b> enrolled students loaded</span><span><b>{courses.length}</b> courses</span></div>
+              <div className="edu-split-forms">
+                <form onSubmit={enrollStudent}><h4>Enroll student</h4><label>Active student<select required value={enrollStudentId} onChange={event => setEnrollStudentId(event.target.value)}><option value="">Choose student</option>{users.filter(item => item.status === "ACTIVE" && item.role === "STUDENT").map(item => <option value={item.id} key={item.id}>{item.fullName} · {item.email}</option>)}</select></label><button className="secondary" type="submit">Enroll student</button></form>
+                <form onSubmit={assignClassTeacher}><h4>Assign teacher</h4><label>Active teacher<select required value={assignTeacherId} onChange={event => setAssignTeacherId(event.target.value)}><option value="">Choose teacher</option>{users.filter(item => item.status === "ACTIVE" && item.role === "TEACHER").map(item => <option value={item.id} key={item.id}>{item.fullName} · {item.email}</option>)}</select></label><button className="secondary" type="submit">Assign teacher</button></form>
+              </div>
+              <div className="class-roster"><div className="subpanel-head"><h4>Active roster</h4><span>{classRoster.length} students</span></div>
+                {classRoster.length === 0 ? <p className="empty">No active students enrolled.</p> : <div className="roster-items">{classRoster.map(enrollment => <div key={enrollment.id}><span className="avatar-mini">{enrollment.student.fullName?.slice(0,1).toUpperCase()}</span><span><strong>{enrollment.student.fullName}</strong><small>{enrollment.student.email}</small></span><span className="status-tag active">ACTIVE</span></div>)}</div>}
+              </div>
+              <form className="attendance-form" onSubmit={markClassAttendance}><h4>Record daily attendance</h4><div className="edu-split-fields"><label>Date<input type="date" required value={attendanceDate} onChange={event => setAttendanceDate(event.target.value)}/></label><label>Mark all active roster as<select value={attendanceDefaultStatus} onChange={event => setAttendanceDefaultStatus(event.target.value)}>{["PRESENT","ABSENT","LATE","EXCUSED"].map(status=><option key={status} value={status}>{status}</option>)}</select></label></div><p>Submitting replaces the selected date’s status for each active enrolled student. Use the roster for this class only.</p><button className="secondary" type="submit" disabled={classRoster.length===0}>Save attendance</button></form>
+              <div className="class-courses"><div className="subpanel-head"><h4>Courses</h4><span>{courses.length} courses</span></div>
+                {courses.map(course => <article className="course-item" key={course.id}><div><strong>{course.title}</strong><small>{course._count?.lessons ?? 0} lessons · {course.status}</small></div><div className="course-actions"><button className="row-action" onClick={() => openCourseLessons(course)}>Lessons</button><select value={course.status} aria-label={"Status for "+course.title} onChange={event => updateCourseStatus(course,event.target.value)}><option value="DRAFT">DRAFT</option><option value="PUBLISHED">PUBLISHED</option><option value="ARCHIVED">ARCHIVED</option></select></div></article>)}
+                <form className="course-create-form" onSubmit={createClassCourse}><h4>Create course</h4><label>Course title<input required minLength="2" maxLength="180" value={newCourseTitle} onChange={event=>setNewCourseTitle(event.target.value)} placeholder="Mathematics foundations"/></label><label>Description<textarea rows="2" maxLength="5000" value={newCourseDescription} onChange={event=>setNewCourseDescription(event.target.value)} placeholder="Course outcomes and overview"/></label><button className="primary-action" type="submit">Create draft course</button></form>
+              </div>
+              {selectedCourse && <div className="lesson-workspace"><div className="subpanel-head"><div><h4>Lessons · {selectedCourse.title}</h4><span className={"status-tag "+selectedCourse.status.toLowerCase()}>{selectedCourse.status}</span></div><button className="row-action" onClick={() => {setSelectedCourse(null);setLessons([]);}}>Close</button></div>
+                {lessons.map(lesson=><article className="lesson-item" key={lesson.id}><div><strong>{lesson.sortOrder}. {lesson.title}</strong><small>{lesson.contentType} · {lesson.published?"Published":"Draft"}</small><p>{lesson.contentText}</p></div></article>)}
+                <form onSubmit={createCourseLesson}><h4>Add lesson</h4><label>Lesson title<input required minLength="2" maxLength="180" value={newLessonTitle} onChange={event=>setNewLessonTitle(event.target.value)} placeholder="Lesson 1"/></label><label>Text content<textarea rows="3" maxLength="50000" value={newLessonText} onChange={event=>setNewLessonText(event.target.value)} placeholder="Write introductory lesson text"/></label><label className="check-row"><input type="checkbox" checked={newLessonPublished} onChange={event=>setNewLessonPublished(event.target.checked)}/> Publish this lesson now</label><button className="secondary" type="submit">Add lesson</button></form>
+              </div>}
+            </>}
+          </section>
+        </div>
+      </section>}
       {view === "users" && <section className="data-panel"><div className="panel-head"><div><h2>Users & profiles</h2><p>{users.length} records loaded · passwords are never returned by the API.</p></div><button className="secondary" onClick={() => loadDashboard(token).catch(e => setActionMessage(e.message))}>Reload</button></div><div className="table-wrap"><table><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Joined</th><th>Action</th></tr></thead><tbody>{users.map(u=><tr key={u.id}><td><strong>{u.fullName}</strong><small>{u.email}</small></td><td>{u.role}</td><td><span className={"status-tag " + u.status.toLowerCase()}>{u.status}</span></td><td>{fmtDate(u.createdAt)}</td><td className="user-actions"><button className="row-action" onClick={() => openProfileManager(u)}>Profiles</button>{u.status === "DELETED" ? "—" : <button className="row-action" disabled={busyId===u.id || (u.id===user.id && u.status==="ACTIVE")} onClick={() => updateUserStatus(u,u.status==="ACTIVE"?"SUSPENDED":"ACTIVE")}>{busyId===u.id?"Saving…":u.status==="ACTIVE"?"Suspend":"Activate"}</button>}</td></tr>)}</tbody></table>{users.length===0&&<p className="empty">No users found.</p>}</div></section>}
 
       {view === "leads" && <section className="data-panel"><div className="panel-head"><div><h2>Website enquiries</h2><p>{leads.length} enquiries loaded · update their follow-up status here.</p></div><button className="secondary" onClick={() => loadDashboard(token).catch(e => setActionMessage(e.message))}>Reload</button></div><div className="table-wrap"><table><thead><tr><th>Contact</th><th>Profile type</th><th>Message</th><th>Created</th><th>Status</th></tr></thead><tbody>{leads.map(lead=><tr key={lead.id}><td><strong>{lead.fullName}</strong><small>{lead.email}</small></td><td>{lead.role}</td><td className="message-cell">{lead.message || "—"}</td><td>{fmtDate(lead.createdAt)}</td><td><select aria-label={"Status for "+lead.fullName} value={lead.status} disabled={busyId===lead.id} onChange={e=>updateLeadStatus(lead,e.target.value)}>{leadStatuses.map(s=><option key={s} value={s}>{s}</option>)}</select></td></tr>)}</tbody></table>{leads.length===0&&<p className="empty">No enquiries have been submitted yet.</p>}</div></section>}
@@ -217,7 +478,7 @@ function App() {
 
       {view === "operations" && <section className="data-panel"><div className="panel-head"><div><h2>Guardian / student link review</h2><p>Requests remain pending until an authorized review is completed. Approval and revocation are audited.</p></div><button className="secondary" onClick={() => loadDashboard(token).catch(e => setActionMessage(e.message))}>Reload</button></div><div className="table-wrap"><table><thead><tr><th>Parent / guardian</th><th>Student</th><th>Requested</th><th>Consent / status</th></tr></thead><tbody>{guardianLinks.map(link=><tr key={link.id}><td><strong>{link.guardian?.fullName || "Unknown guardian"}</strong><small>{link.guardian?.email || "—"}</small></td><td><strong>{link.student?.fullName || "Unknown student"}</strong><small>{link.student?.email || "—"}</small></td><td>{fmtDate(link.createdAt)}</td><td><select aria-label={"Guardian link status for "+(link.guardian?.fullName || "guardian")} value={link.status} disabled={busyId===link.id} onChange={event=>updateGuardianLinkStatus(link,event.target.value)}>{["PENDING","APPROVED","REVOKED"].map(status=><option key={status} value={status}>{status}</option>)}</select>{link.consentAt && <small className="consent-date">Approved {fmtDate(link.consentAt)}</small>}</td></tr>)}</tbody></table>{guardianLinks.length===0&&<p className="empty">There are no guardian/student link requests.</p>}</div></section>}
 
-      {!["overview","users","leads","institutions","operations"].includes(view) && <section className="data-panel placeholder"><div className="module-icon">◈</div><h2>{modules.find(m=>m[2]===view)?.[1] || "Workspace"}</h2><p>This workspace is planned. Add its data model, authorization policies, CRUD API, tests and operational workflows before using it with live records.</p><button className="secondary" onClick={()=>setView("overview")}>Back to overview</button></section>}
+      {!["overview","users","leads","institutions","operations","learning"].includes(view) && <section className="data-panel placeholder"><div className="module-icon">◈</div><h2>{modules.find(m=>m[2]===view)?.[1] || "Workspace"}</h2><p>This workspace is planned. Add its data model, authorization policies, CRUD API, tests and operational workflows before using it with live records.</p><button className="secondary" onClick={()=>setView("overview")}>Back to overview</button></section>}
       <section className="security"><div><h3>Security and access</h3><p>The API validates the active account and role on each request. Keep secrets off the frontend, limit access to this admin hostname, and enable MFA before production launch.</p></div><span>RBAC</span></section>
     </main>
 
