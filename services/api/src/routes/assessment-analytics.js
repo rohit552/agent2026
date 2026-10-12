@@ -321,7 +321,7 @@ assessmentAnalyticsRouter.get("/assessments/:assessmentId", async (req, res, nex
     const attemptIds = attempts.map(attempt => attempt.id);
     const answerRows = attemptIds.length ? await prisma.assessmentAnswer.findMany({
       where: { attemptId: { in: attemptIds }, questionId: { in: assessment.questions.map(question => question.id) } },
-      select: { questionId: true, isCorrect: true, pointsAwarded: true, manuallyGraded: true }
+      select: { questionId: true, isCorrect: true, pointsAwarded: true, manuallyGraded: true, answer: true }
     }) : [];
     const answeredByQuestion = new Map();
     for (const answer of answerRows) {
@@ -331,22 +331,26 @@ assessmentAnalyticsRouter.get("/assessments/:assessmentId", async (req, res, nex
     }
     const questionMetrics = assessment.questions.map(question => {
       const rows = answeredByQuestion.get(question.id) ?? [];
-      const autoScored = rows.filter(row => row.isCorrect !== null);
+      const answeredRows = rows.filter(row => row.answer !== null && row.answer !== undefined);
+      const autoScored = answeredRows.filter(row => row.isCorrect !== null);
       const correct = autoScored.filter(row => row.isCorrect === true).length;
       return {
         questionId: question.id,
         prompt: question.prompt,
         questionType: question.questionType,
         pointsPossible: question.points,
-        answeredCount: rows.length,
+        answeredCount: answeredRows.length,
         correctCount: correct,
         autoScoredCount: autoScored.length,
-        manuallyGradedCount: rows.filter(row => row.manuallyGraded).length,
-        averagePointsAwarded: average(rows.map(row => row.pointsAwarded)),
+        manuallyGradedCount: answeredRows.filter(row => row.manuallyGraded).length,
+        averagePointsAwarded: average(answeredRows.map(row => row.pointsAwarded)),
         correctnessRatePercent: percent(correct, autoScored.length)
       };
     });
     const metrics = summarizeAttempts(attempts);
+    metrics.attemptsAnalyzed = attempts.length;
+    metrics.attemptSampleLimit = 500;
+    metrics.attemptSampleLimitReached = attempts.length === 500;
     const graded = attempts.filter(item => item.status === "GRADED" && item.scorePossible > 0 && item.scoreEarned !== null);
     const scoreBands = [
       { label: "0–39%", min: 0, max: 40 },
