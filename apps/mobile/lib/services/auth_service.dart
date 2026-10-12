@@ -173,6 +173,17 @@ class AuthService {
     return Map<String, dynamic>.from(response['data'] as Map);
   }
 
+
+  Future<Map<String, dynamic>> assessmentHistory() async {
+    final token = await _storage.read(key: _tokenKey);
+    if (token == null || token.isEmpty) {
+      throw const ApiException('Sign in to view assessment history', 401);
+    }
+    final profileId = await _storage.read(key: _profileKey);
+    final response = await _api.get('/api/v1/assessment-analytics/me', token: token, profileId: profileId);
+    return Map<String, dynamic>.from(response['data'] as Map);
+  }
+
   Future<void> logout() async {
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _profileKey);
