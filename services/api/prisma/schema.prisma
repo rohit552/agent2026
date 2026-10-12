@@ -28,6 +28,102 @@ enum AccountStatus {
   DELETED
 }
 
+
+enum ProfileType {
+  SCHOOL_STUDENT
+  COLLEGE_STUDENT
+  COMPETITIVE_EXAM_ASPIRANT
+  GOVERNMENT_JOB_ASPIRANT
+  JOB_SEEKER
+  WORKING_PROFESSIONAL
+  SKILL_LEARNER
+  SPORTS_PARTICIPANT
+  SCHOOL_OWNER
+  FOUNDER_TRUSTEE
+  PRINCIPAL
+  VICE_PRINCIPAL
+  SCHOOL_ADMINISTRATOR
+  COLLEGE_DIRECTOR
+  COLLEGE_ADMINISTRATOR
+  COACHING_INSTITUTE_OWNER
+  SPORTS_ACADEMY_OWNER
+  INSTITUTE_BRANCH_MANAGER
+  SCHOOL_TEACHER
+  COLLEGE_FACULTY
+  TUTOR
+  TRAINER
+  COURSE_CREATOR
+  MENTOR_PROFILE
+  CAREER_COUNSELLOR
+  PSYCHOMETRIC_ASSESSMENT_SPECIALIST
+  CONTENT_CREATOR
+  OLYMPIAD_COACH
+  EMPLOYER
+  RECRUITER_PROFILE
+  HR_MANAGER
+  HIRING_MANAGER
+  INTERNSHIP_PROVIDER
+  TRAINING_PARTNER
+  MARKETPLACE_SELLER
+  EDUCATION_SERVICE_PROVIDER
+  ATHLETE
+  COACH_PROFILE
+  SPORTS_ACADEMY_MANAGER
+  REFEREE_JUDGE
+  TOURNAMENT_ORGANIZER
+  OLYMPIAD_ORGANIZER
+  EVENT_SPONSOR
+  SPORTS_TALENT_SCOUT
+  STATE_PARTNER
+  DISTRICT_PARTNER
+  REFERRAL_PARTNER
+  FRANCHISE_CAMPUS_PARTNER
+  FIELD_SALES_EXECUTIVE
+  TEAM_LEADER
+  ASM
+  STATE_SALES_HEAD
+  ZONE_HEAD
+  SALES_HEAD
+  CUSTOMER_SUPPORT
+  VERIFICATION_OFFICER
+  ASSESSMENT_PROCTOR
+  CONTENT_MODERATOR
+  FINANCE_EXECUTIVE
+  HR_EXECUTIVE
+  OPERATIONS_MANAGER
+  TECHNICAL_SUPPORT
+  PLATFORM_ADMIN_PROFILE
+  SUPER_ADMIN_PROFILE
+  PARENT_GUARDIAN
+  ALUMNI
+  COMMUNITY_MODERATOR
+  GOVERNMENT_INSTITUTIONAL_LIAISON
+  SCHOLARSHIP_PROVIDER
+  RESEARCHER_ASSESSMENT_ANALYST
+}
+
+enum AccessScope {
+  SELF
+  ORGANIZATION
+  BRANCH
+  TERRITORY
+  PLATFORM
+}
+
+enum TerritoryLevel {
+  COUNTRY
+  ZONE
+  STATE
+  DISTRICT
+  SUBDISTRICT
+}
+
+enum GuardianLinkStatus {
+  PENDING
+  APPROVED
+  REVOKED
+}
+
 model User {
   id           String        @id @default(cuid())
   email        String        @unique
@@ -42,6 +138,11 @@ model User {
   updatedAt    DateTime      @updatedAt
   profile      Profile?
   memberships  OrganizationMember[]
+  profileRoles RoleAssignment[] @relation("AssignedProfiles")
+  grantedProfileRoles RoleAssignment[] @relation("ProfileGrantor")
+  guardianLinks GuardianStudentLink[] @relation("GuardianLinks")
+  studentLinks GuardianStudentLink[] @relation("StudentLinks")
+  createdTerritories Territory[] @relation("TerritoryCreator")
   auditEvents  AuditEvent[]  @relation("AuditActor")
 
   @@index([role, status])
@@ -71,6 +172,8 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   members   OrganizationMember[]
+  branches OrganizationBranch[]
+  profileRoles RoleAssignment[]
 }
 
 model OrganizationMember {
@@ -135,4 +238,86 @@ model Lead {
 
   @@index([status, createdAt])
   @@index([email, createdAt])
+}
+
+
+model OrganizationBranch {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  code           String
+  slug           String
+  address        String?
+  status         String   @default("ACTIVE")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  profileRoles   RoleAssignment[]
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, slug])
+  @@index([organizationId, status])
+}
+
+model Territory {
+  id          String         @id @default(cuid())
+  name        String
+  code        String         @unique
+  level       TerritoryLevel
+  parentId    String?
+  status      String         @default("ACTIVE")
+  createdById String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  parent      Territory?     @relation("TerritoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Territory[]    @relation("TerritoryTree")
+  createdBy   User?          @relation("TerritoryCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  profileRoles RoleAssignment[]
+
+  @@index([parentId, level])
+  @@index([level, status])
+}
+
+model RoleAssignment {
+  id             String      @id @default(cuid())
+  userId         String
+  profileType    ProfileType
+  accessRole     UserRole
+  scopeType      AccessScope @default(SELF)
+  organizationId String?
+  branchId       String?
+  territoryId    String?
+  grantedById    String?
+  isDefault      Boolean     @default(false)
+  active         Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  user           User        @relation("AssignedProfiles", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy      User?       @relation("ProfileGrantor", fields: [grantedById], references: [id], onDelete: SetNull)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch         OrganizationBranch? @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  territory      Territory? @relation(fields: [territoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, profileType, organizationId, branchId, territoryId])
+  @@index([userId, active])
+  @@index([profileType, scopeType, active])
+  @@index([organizationId, branchId])
+  @@index([territoryId, active])
+}
+
+model GuardianStudentLink {
+  id         String             @id @default(cuid())
+  guardianId String
+  studentId  String
+  status     GuardianLinkStatus @default(PENDING)
+  consentAt  DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  guardian   User               @relation("GuardianLinks", fields: [guardianId], references: [id], onDelete: Cascade)
+  student    User               @relation("StudentLinks", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([guardianId, studentId])
+  @@index([guardianId, status])
+  @@index([studentId, status])
 }

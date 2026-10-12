@@ -9,17 +9,23 @@ class ApiClient {
 
   Future<Map<String, dynamic>> getHealth() => get('/health');
 
-  Future<Map<String, dynamic>> get(String path, {String? token}) async {
+  Future<Map<String, dynamic>> get(String path, {String? token, String? profileId}) async {
     final response = await _client.get(Uri.parse('$_baseUrl$path'), headers: {
       if (token != null) 'Authorization': 'Bearer $token',
+      if (profileId != null && profileId.isNotEmpty) 'X-SkillHeed-Profile-Id': profileId,
       'Accept': 'application/json',
     }).timeout(const Duration(seconds: 12));
     return _decode(response);
   }
 
-  Future<Map<String, dynamic>> post(String path, Map<String, dynamic> payload) async {
+  Future<Map<String, dynamic>> post(String path, Map<String, dynamic> payload, {String? token, String? profileId}) async {
     final response = await _client.post(Uri.parse('$_baseUrl$path'),
-      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+        if (profileId != null && profileId.isNotEmpty) 'X-SkillHeed-Profile-Id': profileId,
+      },
       body: jsonEncode(payload),
     ).timeout(const Duration(seconds: 12));
     return _decode(response);
