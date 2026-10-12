@@ -72,6 +72,14 @@ async function teacherClassIds(req) {
   });
   return rows.map(row => row.classId);
 }
+function resourceInProfileScope(req, organizationId, branchId = null) {
+  if (globalAdmin(req)) return true;
+  const assignment = req.auth?.profileAssignment;
+  if (!assignment || assignment.organizationId !== organizationId) return false;
+  if (assignment.scopeType === "ORGANIZATION") return true;
+  if (assignment.scopeType === "BRANCH") return Boolean(branchId && assignment.branchId === branchId);
+  return false;
+}
 function profileScopeWhere(req, query = {}) {
   const requestedOrganization = query.organizationId;
   const requestedBranch = query.branchId;
@@ -123,7 +131,7 @@ function summarizeAttempts(attempts) {
 async function canManageAssessment(req, assessment) {
   if (!assessment) return false;
   if (globalAdmin(req)) return true;
-  if (institutionAdmin(req)) return Boolean(profileScopeWhere(req, { organizationId: assessment.organizationId, branchId: assessment.branchId }));
+  if (institutionAdmin(req)) return resourceInProfileScope(req, assessment.organizationId, assessment.branchId);
   if (teacher(req) && assessment.classId) {
     const ids = await teacherClassIds(req);
     return ids.includes(assessment.classId);
@@ -132,7 +140,7 @@ async function canManageAssessment(req, assessment) {
 }
 async function canReadClass(req, cls) {
   if (globalAdmin(req)) return true;
-  if (institutionAdmin(req)) return Boolean(profileScopeWhere(req, { organizationId: cls.organizationId, branchId: cls.branchId }));
+  if (institutionAdmin(req)) return resourceInProfileScope(req, cls.organizationId, cls.branchId);
   if (teacher(req)) {
     const ids = await teacherClassIds(req);
     return ids.includes(cls.id);
