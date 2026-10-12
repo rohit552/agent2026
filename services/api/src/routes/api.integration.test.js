@@ -148,7 +148,7 @@ test("registration, activation, session revocation and lead workflow", {
   assert.equal((await selectedProfile.json()).data.activeRole, "TEACHER");
 
   const adminDeniedWithTeacherProfile = await fetch(`${base}/api/v1/admin/overview`, {
-    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": (await teacherRole.clone().json()).data.assignment.id }
+    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": teacherAssignmentId }
   });
   assert.equal(adminDeniedWithTeacherProfile.status, 403);
 
