@@ -131,3 +131,50 @@ The attached master list is a 70-profile product blueprint, not a claim that all
 4. **Automation and scale:** CRM/FSM/Zoho integration, commission verification, notifications, analytics, AI recommendations and external APIs.
 
 Every new endpoint that reads or mutates organization, branch or territory records must apply server-side scope checks; a role-specific dashboard alone is not an access-control boundary.
+
+## Phase 3 — Education Core
+
+The first education vertical is now implemented in the Node API, PostgreSQL schema, admin console and Flutter learner app.
+
+### Data models and migration
+The `202610130002_education_core` migration adds:
+- `AcademicClass` — institution/branch-scoped academic class or batch with a unique code per academic year.
+- `StudentEnrollment` — active/pending/completed/withdrawn student enrolment.
+- `TeacherClassAssignment` — explicit teacher-to-class assignment.
+- `AttendanceRecord` — per-student, per-class, per-date status with a unique constraint.
+- `Course` — draft/published/archived learning course linked to an institution and optionally a class.
+- `CourseLesson` — ordered text, URL, PDF/video/live-type lesson metadata and publication flag.
+
+### Education API
+All routes below are under `/api/v1/education` and require an authenticated account. A selected profile is validated through `X-SkillHeed-Profile-Id`.
+
+- `GET /classes` and `GET /classes/:classId` — return classes filtered to global administrator, assigned organization/branch, assigned teacher classes, or the current student's active enrolments.
+- `POST /classes` — create a class within an active organization and, optionally, its active branch.
+- `POST /classes/:classId/teachers` — assign an active teacher with an explicit organization teacher profile or account teacher role.
+- `POST /classes/:classId/enrollments` — enroll an active student account.
+- `PATCH /classes/:classId/enrollments/:studentId` — change enrolment status.
+- `GET /classes/:classId/roster` — roster access for authorized institution administrators and assigned teachers.
+- `POST /classes/:classId/attendance` and `GET /classes/:classId/attendance` — validated attendance entry and review.
+- `GET /me/attendance` — the current student profile's own attendance.
+- `GET /courses` and `GET /courses/:courseId` — course catalogue/detail. Students receive published content only when enrolled in the relevant class or institution.
+- `POST /courses` — create a course within the current institution/profile scope, or as a platform administrator.
+- `PATCH /courses/:courseId/status` — draft/publish/archive; only an institution or platform administrator can publish.
+- `GET /courses/:courseId/lessons`, `POST /courses/:courseId/lessons`, and `PATCH /courses/:courseId/lessons/:lessonId` — ordered lessons with draft/published gating.
+
+Important guardrails:
+- A teacher only manages a class after assignment and only within their selected profile's organization/branch scope.
+- Organization and branch IDs sent by clients are checked against the selected role assignment; they cannot be used to switch tenants.
+- Attendance records must refer to active students enrolled in that class. Duplicate student entries and invalid dates are rejected.
+- A student cannot list a class roster or access a course tied to a class where they are not actively enrolled. Institution-level published courses are visible only to students with an active enrolment in that organization.
+- Creating a course linked to a class inherits that class's branch when omitted and rejects a conflicting branch.
+- Class, course, lesson and attendance changes write audit events.
+
+### UI
+- **Admin → Learning:** create classes, choose institutions/branches, enrol students, assign teachers, view the active roster, mark the roster with a selected attendance status, create courses and add lessons, and change course publication status.
+- **Flutter app:** shows the current profile's classes, visible published courses, published lesson text/links and recent attendance. Course list and lessons are loaded from the API after sign-in and when switching profiles.
+
+### Tests included
+The PostgreSQL-backed API integration test now exercises class creation, denial of student class creation, teacher assignment, student enrolment, student roster denial, teacher roster access, attendance submission, invalid date rejection, student attendance retrieval, course creation/publication and student lesson access. Scope cases check that a selected teacher profile cannot browse a different organization.
+
+### Still not implemented in Education Core
+This slice does not yet contain live/video lesson streaming, binary file upload/storage, quizzes/question banks, assessment/proctoring, timetable/calendar, attendance correction approvals, term/grade/report-card calculations, HPC/NCrF competency records, fees/payments, parent access to student academic records, bulk CSV import, class CRUD/edit/archive UI, academic analytics, or automated course completion. Treat the current models and screens as the first usable foundation rather than a complete LMS.

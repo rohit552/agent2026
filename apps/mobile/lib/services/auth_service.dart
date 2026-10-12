@@ -100,6 +100,45 @@ class AuthService {
 
   Future<String?> selectedProfileId() => _storage.read(key: _profileKey);
 
+
+  Future<Map<String, dynamic>> educationSummary() async {
+    final token = await _storage.read(key: _tokenKey);
+    if (token == null || token.isEmpty) {
+      throw const ApiException('Sign in to view your education dashboard', 401);
+    }
+    final profileId = await _storage.read(key: _profileKey);
+    final user = _normaliseUser(await _api.get('/api/v1/auth/me', token: token, profileId: profileId));
+    final role = user['activeRole']?.toString() ?? user['role']?.toString() ?? 'STUDENT';
+    if (!['STUDENT', 'TEACHER', 'INSTITUTION_ADMIN', 'PLATFORM_ADMIN', 'SUPER_ADMIN'].contains(role)) {
+      return {'classes': <dynamic>[], 'courses': <dynamic>[], 'attendance': <dynamic>[], 'activeRole': role};
+    }
+
+    final classesResponse = await _api.get('/api/v1/education/classes', token: token, profileId: profileId);
+    final coursesResponse = await _api.get('/api/v1/education/courses', token: token, profileId: profileId);
+    List<dynamic> attendance = <dynamic>[];
+    if (role == 'STUDENT') {
+      final attendanceResponse = await _api.get('/api/v1/education/me/attendance', token: token, profileId: profileId);
+      final data = Map<String, dynamic>.from(attendanceResponse['data'] as Map);
+      attendance = data['records'] as List<dynamic>? ?? <dynamic>[];
+    }
+    return {
+      'classes': (Map<String, dynamic>.from(classesResponse['data'] as Map)['classes'] as List<dynamic>? ?? <dynamic>[]),
+      'courses': (Map<String, dynamic>.from(coursesResponse['data'] as Map)['courses'] as List<dynamic>? ?? <dynamic>[]),
+      'attendance': attendance,
+      'activeRole': role,
+    };
+  }
+
+  Future<List<Map<String, dynamic>>> courseLessons(String courseId) async {
+    final token = await _storage.read(key: _tokenKey);
+    if (token == null || token.isEmpty) throw const ApiException('Sign in to view course lessons', 401);
+    final profileId = await _storage.read(key: _profileKey);
+    final response = await _api.get('/api/v1/education/courses/$courseId/lessons', token: token, profileId: profileId);
+    final data = Map<String, dynamic>.from(response['data'] as Map);
+    final lessons = data['lessons'] as List<dynamic>? ?? <dynamic>[];
+    return lessons.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+  }
+
   Future<void> logout() async {
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _profileKey);

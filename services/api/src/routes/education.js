@@ -229,6 +229,7 @@ educationRouter.post("/classes", async (req, res, next) => {
     const { organizationId: requestedOrganizationId, branchId, ...fields } = parsed.data;
     const assignment = req.auth.profileAssignment;
     if (!isGlobalAdmin(req) && !isInstitutionAdmin(req)) return sendForbidden(res, "Only an authorized institution administrator can create classes");
+    if (!isGlobalAdmin(req) && requestedOrganizationId && requestedOrganizationId !== assignment?.organizationId) return sendForbidden(res, "This profile cannot create a class in another organization");
     const organizationId = isGlobalAdmin(req) ? requestedOrganizationId : assignment?.organizationId;
     if (!organizationId) return res.status(400).json({ error: { code: "ORGANIZATION_REQUIRED", message: "organizationId is required for platform admins" } });
     if (!await canManageOrganization(req, organizationId, branchId ?? null)) return sendForbidden(res, "Only an authorized institution administrator can create classes");
@@ -398,6 +399,7 @@ educationRouter.post("/courses", async (req, res, next) => {
     const { organizationId: requestedOrganizationId, branchId, classId, ...fields } = parsed.data;
     const assignment = req.auth.profileAssignment;
     if (!isGlobalAdmin(req) && !isInstitutionAdmin(req) && !isTeacher(req)) return sendForbidden(res, "Only an institution administrator or assigned teacher can create courses");
+    if (!isGlobalAdmin(req) && requestedOrganizationId && requestedOrganizationId !== assignment?.organizationId) return sendForbidden(res, "This profile cannot create a course in another organization");
     const organizationId = isGlobalAdmin(req) ? requestedOrganizationId : assignment?.organizationId;
     if (!organizationId) return res.status(400).json({ error: { code: "ORGANIZATION_REQUIRED", message: "An organization-scoped profile is required to create courses" } });
     let cls = null;

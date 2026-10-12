@@ -194,6 +194,11 @@ test("registration, activation, session revocation and lead workflow", {
   });
   assert.equal(foreignBranchAccess.status, 403);
 
+  const scopedEducationClassList = await fetch(`${base}/api/v1/education/classes?organizationId=${otherOrganizationId}`, {
+    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": teacherAssignmentId }
+  });
+  assert.equal(scopedEducationClassList.status, 403);
+
   const countryCode = `CI-C-${suffix}`;
   const country = await fetch(`${base}/api/v1/admin/territories`, {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
