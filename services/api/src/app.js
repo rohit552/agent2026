@@ -8,6 +8,8 @@ import { prisma } from "./db.js";
 import { authRouter } from "./routes/auth.js";
 import { leadsRouter } from "./routes/leads.js";
 import { adminRouter } from "./routes/admin.js";
+import { adminRolesRouter } from "./routes/admin-roles.js";
+import { profileRouter, meProfileRouter } from "./routes/profile-roles.js";
 
 export const app = express();
 
@@ -38,6 +40,9 @@ app.get("/health", async (_req, res) => {
 });
 
 app.use("/api/v1/admin", adminRouter);
+app.use("/api/v1/admin", adminRolesRouter);
+app.use("/api/v1/profiles", profileRouter);
+app.use("/api/v1/me", meProfileRouter);
 
 app.use("/api/v1/leads", rateLimit({ windowMs: 60 * 60 * 1000, limit: process.env.NODE_ENV === "test" ? 1000 : 10, standardHeaders: "draft-7", legacyHeaders: false, message: { error: { code: "RATE_LIMITED", message: "Too many enquiries; please try again later" } } }), leadsRouter);
 
