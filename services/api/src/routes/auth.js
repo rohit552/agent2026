@@ -106,7 +106,7 @@ authRouter.get("/me", requireAuth, async (req, res, next) => {
     if (!user || user.status !== "ACTIVE") {
       return res.status(401).json({ error: { code: "ACCOUNT_UNAVAILABLE", message: "Account is unavailable" } });
     }
-    return res.json({ data: { user } });
+    return res.json({ data: { user, activeRole: req.auth.effectiveRole ?? req.auth.role, activeProfile: req.auth.profileAssignment } });
   } catch (error) {
     return next(error);
   }
