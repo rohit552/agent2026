@@ -11,10 +11,25 @@ permissions:
 jobs:
   node:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: skillheed
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: skillheed
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U skillheed -d skillheed"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     env:
       DATABASE_URL: postgresql://skillheed:ci_password@localhost:5432/skillheed?schema=public
       JWT_SECRET: ci_only_secret_do_not_use_in_production_32_chars_minimum
       NODE_ENV: test
+      RUN_DB_INTEGRATION: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,6 +37,7 @@ jobs:
           node-version: 20
       - run: npm install
       - run: npm run db:generate
+      - run: npm run db:deploy
       - run: npm run lint
       - run: npm run build
       - run: npm test
