@@ -380,6 +380,117 @@ test("registration, activation, session revocation and lead workflow", {
   assert.equal(studentLessons.status, 200);
   assert.equal((await studentLessons.json()).data.lessons.length, 1);
 
+
+  // Assessment core: scoped authoring, hidden answer keys, timed attempt, auto-score and manual grading.
+  const assessmentCreate = await fetch(`${base}/api/v1/assessments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ organizationId, branchId, classId: academicClassId, title: "Science Check", description: "Integration assessment", timeLimitSeconds: 900, maxAttempts: 1 })
+  });
+  assert.equal(assessmentCreate.status, 201);
+  const assessment = (await assessmentCreate.json()).data.assessment;
+  const assessmentId = assessment.id;
+
+  const choiceQuestionResponse = await fetch(`${base}/api/v1/assessments/${assessmentId}/questions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      prompt: "Which option is correct?",
+      questionType: "SINGLE_CHOICE",
+      options: [{ id: "a", text: "Option A" }, { id: "b", text: "Option B" }],
+      correctAnswers: ["b"],
+      explanation: "Option B is correct.",
+      points: 2,
+      sortOrder: 1
+    })
+  });
+  assert.equal(choiceQuestionResponse.status, 201);
+  const choiceQuestionId = (await choiceQuestionResponse.json()).data.question.id;
+
+  const writtenQuestionResponse = await fetch(`${base}/api/v1/assessments/${assessmentId}/questions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ prompt: "Explain your reasoning.", questionType: "SHORT_TEXT", points: 3, sortOrder: 2 })
+  });
+  assert.equal(writtenQuestionResponse.status, 201);
+  const writtenQuestionId = (await writtenQuestionResponse.json()).data.question.id;
+
+  const publishAssessment = await fetch(`${base}/api/v1/assessments/${assessmentId}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ status: "PUBLISHED" })
+  });
+  assert.equal(publishAssessment.status, 200);
+
+  const studentAssessment = await fetch(`${base}/api/v1/assessments/${assessmentId}`, {
+    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId }
+  });
+  assert.equal(studentAssessment.status, 200);
+  const studentAssessmentData = (await studentAssessment.json()).data.assessment;
+  assert.equal(studentAssessmentData.questions.length, 2);
+  assert.equal(studentAssessmentData.questions[0].correctAnswers, undefined);
+  assert.equal(studentAssessmentData.questions[0].explanation, undefined);
+
+  const attemptStart = await fetch(`${base}/api/v1/assessments/${assessmentId}/attempts`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId }
+  });
+  assert.equal(attemptStart.status, 201);
+  const attempt = (await attemptStart.json()).data.attempt;
+  const assessmentAttemptId = attempt.id;
+
+  const answerChoice = await fetch(`${base}/api/v1/assessments/attempts/${assessmentAttemptId}/answers/${choiceQuestionId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId },
+    body: JSON.stringify({ answer: "b" })
+  });
+  assert.equal(answerChoice.status, 200);
+
+  const answerWritten = await fetch(`${base}/api/v1/assessments/attempts/${assessmentAttemptId}/answers/${writtenQuestionId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId },
+    body: JSON.stringify({ answer: "The evidence supports option B." })
+  });
+  assert.equal(answerWritten.status, 200);
+
+  const submitAssessment = await fetch(`${base}/api/v1/assessments/attempts/${assessmentAttemptId}/submit`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId }
+  });
+  assert.equal(submitAssessment.status, 200);
+  assert.equal((await submitAssessment.json()).data.requiresManualGrading, true);
+
+  const studentAttemptBeforeGrade = await fetch(`${base}/api/v1/assessments/attempts/${assessmentAttemptId}`, {
+    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId }
+  });
+  assert.equal(studentAttemptBeforeGrade.status, 200);
+  const submittedAttempt = (await studentAttemptBeforeGrade.json()).data.attempt;
+  assert.equal(submittedAttempt.status, "SUBMITTED");
+  assert.equal(submittedAttempt.scoreEarned, undefined);
+
+  const gradeAttempt = await fetch(`${base}/api/v1/assessments/attempts/${assessmentAttemptId}/grade`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ answers: [{ questionId: writtenQuestionId, pointsAwarded: 2, feedback: "Good explanation." }] })
+  });
+  assert.equal(gradeAttempt.status, 200);
+  assert.equal((await gradeAttempt.json()).data.attempt.scoreEarned, 4);
+
+  const studentAttemptAfterGrade = await fetch(`${base}/api/v1/assessments/attempts/${assessmentAttemptId}`, {
+    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId }
+  });
+  assert.equal(studentAttemptAfterGrade.status, 200);
+  const gradedAttempt = (await studentAttemptAfterGrade.json()).data;
+  assert.equal(gradedAttempt.attempt.status, "GRADED");
+  assert.equal(gradedAttempt.attempt.scoreEarned, 4);
+
+  const secondAttempt = await fetch(`${base}/api/v1/assessments/${assessmentId}/attempts`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId }
+  });
+  assert.equal(secondAttempt.status, 409);
+  assert.equal((await secondAttempt.json()).error.code, "ATTEMPT_LIMIT_REACHED");
+
   await prisma.user.update({ where: { id: userId }, data: { status: "SUSPENDED" } });
   const revoked = await fetch(`${base}/api/v1/auth/me`, { headers: { Authorization: `Bearer ${session.accessToken}` } });
   assert.equal(revoked.status, 401);
