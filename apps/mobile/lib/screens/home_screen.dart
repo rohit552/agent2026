@@ -55,6 +55,13 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
+    final rawProfiles = _currentUser?['profileRoles'];
+    final profileRoles = rawProfiles is List
+        ? rawProfiles.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+        : <Map<String, dynamic>>[];
+    final rawActiveProfile = _currentUser?['activeProfile'];
+    final activeProfileId = rawActiveProfile is Map ? rawActiveProfile['id']?.toString() : null;
+
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -65,8 +72,44 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 5),
           Text(_currentUser?['email']?.toString() ?? '', style: const TextStyle(fontSize: 12, color: Color(0xFF687891))),
           const SizedBox(height: 8),
-          Text('Role: ${_currentUser?['role'] ?? 'USER'}', style: const TextStyle(fontSize: 11, color: Color(0xFF687891))),
-          const SizedBox(height: 18),
+          Text('Active role: ${_currentUser?['activeRole'] ?? _currentUser?['role'] ?? 'USER'}', style: const TextStyle(fontSize: 11, color: Color(0xFF687891))),
+          const SizedBox(height: 20),
+          const Text('Switch profile', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 5),
+          const Text('Each profile is validated by the API against its assigned scope.', style: TextStyle(fontSize: 10, height: 1.6, color: Color(0xFF687891))),
+          const SizedBox(height: 8),
+          ListTile(
+            dense: true,
+            selected: activeProfileId == null,
+            leading: const Icon(Icons.person_outline),
+            title: const Text('Use main account role', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            subtitle: Text((_currentUser?['role'] ?? 'USER').toString(), style: const TextStyle(fontSize: 10)),
+            onTap: () => _switchProfile(sheetContext, null),
+          ),
+          if (profileRoles.isEmpty)
+            const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('No additional profiles have been assigned to this account.', style: TextStyle(fontSize: 11, color: Color(0xFF687891))))
+          else
+            ...profileRoles.map((profile) {
+              final id = profile['id']?.toString() ?? '';
+              final profileType = _prettyProfile(profile['profileType']?.toString() ?? 'PROFILE');
+              final scope = profile['scopeType']?.toString() ?? 'SELF';
+              final organization = profile['organization'];
+              final territory = profile['territory'];
+              final branch = profile['branch'];
+              final scopeLabel = organization is Map
+                  ? '${organization['name']}${branch is Map ? ' / ${branch['name']}' : ''}'
+                  : territory is Map ? '${territory['name']} · ${territory['level']}' : scope;
+              return ListTile(
+                dense: true,
+                selected: id == activeProfileId,
+                leading: const Icon(Icons.badge_outlined),
+                title: Text(profileType, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                subtitle: Text('${profile['accessRole']} · $scopeLabel', style: const TextStyle(fontSize: 10)),
+                trailing: profile['isDefault'] == true ? const Icon(Icons.star_rounded, size: 16, color: Color(0xFF1769FF)) : null,
+                onTap: () => _switchProfile(sheetContext, id),
+              );
+            }),
+          const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: () async {
               await _auth.logout();
@@ -80,6 +123,28 @@ class _HomeScreenState extends State<HomeScreen> {
         ]),
       )),
     );
+  }
+
+  Future<void> _switchProfile(BuildContext sheetContext, String? profileId) async {
+    try {
+      if (profileId == null || profileId.isEmpty) {
+        await _auth.clearSelectedProfile();
+      } else {
+        await _auth.selectProfile(profileId);
+      }
+      final refreshedUser = await _auth.currentUser();
+      if (!mounted || !sheetContext.mounted) return;
+      Navigator.of(sheetContext).pop();
+      if (refreshedUser != null) setState(() => _currentUser = refreshedUser);
+    } catch (_) {
+      if (!mounted || !sheetContext.mounted) return;
+      Navigator.of(sheetContext).pop();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not switch profile. Please try again.')));
+    }
+  }
+
+  String _prettyProfile(String value) {
+    return value.toLowerCase().split('_').map((part) => part.isEmpty ? part : '${part[0].toUpperCase()}${part.substring(1)}').join(' ');
   }
 
   void _showInfo(BuildContext context, String title, String body) {
