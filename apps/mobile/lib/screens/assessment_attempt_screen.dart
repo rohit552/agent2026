@@ -142,7 +142,7 @@ class _AssessmentAttemptScreenState extends State<AssessmentAttemptScreen> {
         if (type == 'SINGLE_CHOICE')
           RadioGroup<String>(
             groupValue: current is String ? current : null,
-            onChanged: _submitting ? null : (value) { if (value != null) _setAnswer(id, value); },
+            onChanged: (value) { if (!_submitting && value != null) _setAnswer(id, value); },
             child: Column(
               children: options.map((option) {
                 final optionId = option['id']?.toString() ?? '';
