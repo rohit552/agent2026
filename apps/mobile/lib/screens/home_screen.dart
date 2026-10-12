@@ -15,6 +15,11 @@ class _HomeScreenState extends State<HomeScreen> {
   String _apiState = 'Checking API connection…';
   Map<String, dynamic>? _currentUser;
   bool _loadingProfile = true;
+  bool _educationLoading = false;
+  String _educationError = '';
+  List<Map<String, dynamic>> _classes = [];
+  List<Map<String, dynamic>> _courses = [];
+  List<Map<String, dynamic>> _attendance = [];
 
   @override
   void initState() {
@@ -39,9 +44,78 @@ class _HomeScreenState extends State<HomeScreen> {
       final user = await _auth.currentUser();
       if (!mounted) return;
       setState(() { _currentUser = user; _loadingProfile = false; });
+      if (user != null) await _loadEducation();
     } catch (_) {
       if (!mounted) return;
       setState(() => _loadingProfile = false);
+    }
+  }
+
+  Future<void> _loadEducation() async {
+    if (_currentUser == null) {
+      if (mounted) setState(() { _classes = []; _courses = []; _attendance = []; _educationError = ''; _educationLoading = false; });
+      return;
+    }
+    setState(() { _educationLoading = true; _educationError = ''; });
+    try {
+      final summary = await _auth.educationSummary();
+      if (!mounted) return;
+      setState(() {
+        _classes = (summary['classes'] as List<dynamic>? ?? <dynamic>[])
+            .map((item) => Map<String, dynamic>.from(item as Map)).toList();
+        _courses = (summary['courses'] as List<dynamic>? ?? <dynamic>[])
+            .map((item) => Map<String, dynamic>.from(item as Map)).toList();
+        _attendance = (summary['attendance'] as List<dynamic>? ?? <dynamic>[])
+            .map((item) => Map<String, dynamic>.from(item as Map)).toList();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _educationError = error is ApiException ? error.message : 'Could not load your education dashboard.');
+    } finally {
+      if (mounted) setState(() => _educationLoading = false);
+    }
+  }
+
+  Future<void> _openCourse(Map<String, dynamic> course) async {
+    final courseId = course['id']?.toString();
+    if (courseId == null || courseId.isEmpty) return;
+    try {
+      final lessons = await _auth.courseLessons(courseId);
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (sheetContext) => SafeArea(child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(course['title']?.toString() ?? 'Course', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF101D3A))),
+            const SizedBox(height: 7),
+            Text(course['description']?.toString() ?? '', style: const TextStyle(fontSize: 11, height: 1.6, color: Color(0xFF687891))),
+            const SizedBox(height: 12),
+            if (lessons.isEmpty)
+              const Padding(padding: EdgeInsets.symmetric(vertical: 18), child: Text('No published lessons are available yet.', style: TextStyle(fontSize: 12, color: Color(0xFF687891))))
+            else
+              SizedBox(height: MediaQuery.of(sheetContext).size.height * .52, child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: lessons.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final lesson = lessons[index];
+                  return Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('${lesson['sortOrder'] ?? index + 1}. ${lesson['title'] ?? 'Lesson'}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+                    if ((lesson['description'] ?? '').toString().isNotEmpty) Padding(padding: const EdgeInsets.only(top: 5), child: Text(lesson['description'].toString(), style: const TextStyle(fontSize: 11, color: Color(0xFF687891)))),
+                    if ((lesson['contentText'] ?? '').toString().isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(lesson['contentText'].toString(), style: const TextStyle(fontSize: 12, height: 1.7))),
+                    if ((lesson['contentUrl'] ?? '').toString().isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: SelectableText(lesson['contentUrl'].toString(), style: const TextStyle(fontSize: 11, color: Color(0xFF1769FF)))),
+                  ]));
+                },
+              )),
+          ]),
+        )),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error is ApiException ? error.message : 'Could not load course lessons.')));
     }
   }
 
@@ -51,7 +125,10 @@ class _HomeScreenState extends State<HomeScreen> {
         MaterialPageRoute(builder: (_) => const AuthScreen()),
       );
       if (!mounted) return;
-      if (user != null) setState(() => _currentUser = user);
+      if (user != null) {
+        setState(() => _currentUser = user);
+        await _loadEducation();
+      }
       return;
     }
 
@@ -115,7 +192,7 @@ class _HomeScreenState extends State<HomeScreen> {
               await _auth.logout();
               if (!mounted || !sheetContext.mounted) return;
               Navigator.of(sheetContext).pop();
-              setState(() => _currentUser = null);
+              setState(() { _currentUser = null; _classes = []; _courses = []; _attendance = []; _educationError = ''; });
             },
             icon: const Icon(Icons.logout),
             label: const Text('Sign out'),
@@ -135,7 +212,10 @@ class _HomeScreenState extends State<HomeScreen> {
       final refreshedUser = await _auth.currentUser();
       if (!mounted || !sheetContext.mounted) return;
       Navigator.of(sheetContext).pop();
-      if (refreshedUser != null) setState(() => _currentUser = refreshedUser);
+      if (refreshedUser != null) {
+        setState(() => _currentUser = refreshedUser);
+        await _loadEducation();
+      }
     } catch (_) {
       if (!mounted || !sheetContext.mounted) return;
       Navigator.of(sheetContext).pop();
@@ -159,6 +239,19 @@ class _HomeScreenState extends State<HomeScreen> {
           Text(body, style: const TextStyle(fontSize: 13, height: 1.65, color: Color(0xFF687891))),
         ]),
       ),
+    );
+  }
+
+  Widget _summaryTile(String label, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 11),
+      decoration: BoxDecoration(color: const Color(0xFFF6F9FF), borderRadius: BorderRadius.circular(12)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, size: 17, color: const Color(0xFF1769FF)),
+        const SizedBox(height: 8),
+        Text(value, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF101D3A))),
+        Text(label, style: const TextStyle(fontSize: 9, color: Color(0xFF71829C))),
+      ]),
     );
   }
 
@@ -187,7 +280,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const Text('SkillHeed', style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: -.5)),
         ]),
         actions: [
-          IconButton(onPressed: _checkApi, icon: const Icon(Icons.sync_rounded), tooltip: 'Check API'),
+          IconButton(onPressed: () async { await _checkApi(); await _loadEducation(); }, icon: const Icon(Icons.sync_rounded), tooltip: 'Refresh data'),
           IconButton(onPressed: _openAccount, icon: Icon(_currentUser == null ? Icons.person_outline : Icons.account_circle_outlined), tooltip: _currentUser == null ? 'Sign in' : 'Account'),
         ],
       ),
@@ -211,6 +304,84 @@ class _HomeScreenState extends State<HomeScreen> {
             ]),
           ),
           const SizedBox(height: 22),
+
+          if (_currentUser != null && ['STUDENT','TEACHER','INSTITUTION_ADMIN','PLATFORM_ADMIN','SUPER_ADMIN'].contains((_currentUser?['activeRole'] ?? _currentUser?['role']).toString()))
+            Container(
+              margin: const EdgeInsets.only(bottom: 22),
+              padding: const EdgeInsets.all(17),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFE7EDF6))),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('Your learning dashboard', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF101D3A))),
+                    const SizedBox(height: 4),
+                    Text((_currentUser?['activeRole'] ?? _currentUser?['role'] ?? 'STUDENT').toString(), style: const TextStyle(fontSize: 9, letterSpacing: .5, color: Color(0xFF71829C))),
+                  ])),
+                  IconButton(onPressed: _loadEducation, tooltip: 'Refresh classes and courses', icon: const Icon(Icons.refresh_rounded, color: Color(0xFF1769FF))),
+                ]),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(child: _summaryTile('Classes', _classes.length.toString(), Icons.school_outlined)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _summaryTile('Courses', _courses.length.toString(), Icons.menu_book_outlined)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _summaryTile('Attendance', _attendance.length.toString(), Icons.fact_check_outlined)),
+                ]),
+                if (_educationLoading) const Padding(padding: EdgeInsets.only(top: 14), child: LinearProgressIndicator(minHeight: 2)),
+                if (_educationError.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_educationError, style: const TextStyle(fontSize: 10, color: Color(0xFFB42323)))),
+                if (!_educationLoading && _educationError.isEmpty && _classes.isEmpty && _courses.isEmpty)
+                  const Padding(padding: EdgeInsets.only(top: 14), child: Text('Your classes and courses will appear here when your institution enrolls you or publishes course content.', style: TextStyle(fontSize: 10, height: 1.7, color: Color(0xFF71829C)))),
+                if (_classes.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const Text('My classes', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF243652))),
+                  const SizedBox(height: 5),
+                  ..._classes.take(4).map((item) => ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.class_outlined, color: Color(0xFF1769FF)),
+                    title: Text(item['name']?.toString() ?? 'Class', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w750)),
+                    subtitle: Text('${item['organization'] is Map ? item['organization']['name'] : ''} · ${item['academicYear'] ?? ''}', style: const TextStyle(fontSize: 9, color: Color(0xFF71829C))),
+                  )),
+                ],
+                if (_courses.isNotEmpty) ...[
+                  const SizedBox(height: 7),
+                  const Text('Available courses', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF243652))),
+                  const SizedBox(height: 7),
+                  ..._courses.take(5).map((course) => Card(
+                    margin: const EdgeInsets.only(bottom: 7),
+                    elevation: 0,
+                    color: const Color(0xFFF8FAFF),
+                    child: ListTile(
+                      dense: true,
+                      onTap: () => _openCourse(course),
+                      leading: const Icon(Icons.menu_book_outlined, color: Color(0xFF1769FF)),
+                      title: Text(course['title']?.toString() ?? 'Course', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+                      subtitle: Text('${course['_count'] is Map ? course['_count']['lessons'] ?? 0 : 0} lessons · ${course['status'] ?? 'PUBLISHED'}', style: const TextStyle(fontSize: 9, color: Color(0xFF71829C))),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                    ),
+                  )),
+                ],
+                if (_attendance.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  const Text('Recent attendance', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF243652))),
+                  const SizedBox(height: 5),
+                  ..._attendance.take(3).map((record) {
+                    final rawDate = record['date']?.toString() ?? '';
+                    final parsedDate = DateTime.tryParse(rawDate);
+                    final classInfo = record['academicClass'];
+                    final className = classInfo is Map ? classInfo['name']?.toString() ?? 'Class' : 'Class';
+                    final status = record['status']?.toString() ?? '—';
+                    final statusColor = status == 'PRESENT' ? const Color(0xFF087847) : status == 'ABSENT' ? const Color(0xFFB42323) : const Color(0xFF946200);
+                    return Padding(padding: const EdgeInsets.symmetric(vertical: 5), child: Row(children: [
+                      const Icon(Icons.event_available_outlined, size: 16, color: Color(0xFF71829C)),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text('$className · ${parsedDate == null ? rawDate : parsedDate.toLocal().toString().split(' ').first}', style: const TextStyle(fontSize: 10, color: Color(0xFF53657F)))),
+                      Text(status, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: statusColor)),
+                    ]));
+                  }),
+                ],
+              ]),
+            ),
           Text('Explore SkillHeed', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, color: const Color(0xFF101D3A))),
           const SizedBox(height: 12),
           ...modules.map((m) => Card(
