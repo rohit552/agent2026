@@ -23,8 +23,9 @@ class AuthService {
     }
     await _storage.write(key: _tokenKey, value: token);
     await _storage.delete(key: _profileKey);
-    final hydrated = await _api.get('/api/v1/auth/me', token: token);
-    return _normaliseUser(hydrated);
+    final hydrated = await currentUser();
+    if (hydrated == null) throw const ApiException('The account could not be loaded', 502);
+    return hydrated;
   }
 
   Future<Map<String, dynamic>> register({
