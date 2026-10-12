@@ -614,6 +614,54 @@ function App() {
 
 
 
+
+      {view === "analytics" && <section className="data-panel analytics-panel">
+        <div className="panel-head"><div><h2>Assessment performance</h2><p>Review completion, average scores, score ranges and question-level outcomes for your authorized scope.</p></div><button className="secondary" disabled={analyticsLoading} onClick={() => loadAssessmentAnalytics()}>Refresh reports</button></div>
+        <form className="analytics-filter-form" onSubmit={loadAssessmentAnalytics}>
+          <label>Institution<select value={analyticsFilters.organizationId} onChange={event=>setAnalyticsFilters(current=>({...current,organizationId:event.target.value,classId:""}))}><option value="">All permitted institutions</option>{organizations.filter(org=>org.status==="ACTIVE").map(org=><option key={org.id} value={org.id}>{org.name}</option>)}</select></label>
+          <label>Class / batch<select value={analyticsFilters.classId} onChange={event=>setAnalyticsFilters(current=>({...current,classId:event.target.value}))}><option value="">All classes in scope</option>{classes.filter(cls=>!analyticsFilters.organizationId||cls.organizationId===analyticsFilters.organizationId).map(cls=><option value={cls.id} key={cls.id}>{cls.name} · {cls.academicYear}</option>)}</select></label>
+          <label>Started from<input type="date" value={analyticsFilters.from} onChange={event=>setAnalyticsFilters(current=>({...current,from:event.target.value}))}/></label>
+          <label>Started to<input type="date" value={analyticsFilters.to} onChange={event=>setAnalyticsFilters(current=>({...current,to:event.target.value}))}/></label>
+          <button className="primary-action" type="submit" disabled={analyticsLoading}>{analyticsLoading?"Loading reports…":"Load analytics"}</button>
+        </form>
+        {analyticsError && <p className="education-error" role="alert">{analyticsError}</p>}
+        {!analyticsOverview && <div className="analytics-empty"><span>◷</span><h3>Load assessment reports</h3><p>Choose an institution, class, or date range and load reports to see assessment outcomes within your server-authorized scope.</p><button className="primary-action" disabled={analyticsLoading} onClick={()=>loadAssessmentAnalytics()}>{analyticsLoading?"Loading…":"Load reports"}</button></div>}
+        {analyticsOverview && <>
+          <div className="analytics-kpis">
+            <article><span>Assessments</span><strong>{analyticsOverview.metrics.totalAssessments}</strong><small>{analyticsOverview.metrics.publishedAssessments} published · {analyticsOverview.metrics.draftAssessments} draft</small></article>
+            <article><span>Attempts</span><strong>{analyticsOverview.metrics.totalAttempts}</strong><small>{analyticsOverview.metrics.gradedAttempts} graded · {analyticsOverview.metrics.inProgressAttempts} in progress</small></article>
+            <article><span>Average score</span><strong>{analyticsOverview.metrics.averageScorePercent == null ? "—" : analyticsOverview.metrics.averageScorePercent+"%"}</strong><small>Graded attempts only</small></article>
+            <article><span>Completion</span><strong>{analyticsOverview.metrics.completionRatePercent == null ? "—" : analyticsOverview.metrics.completionRatePercent+"%"}</strong><small>{analyticsOverview.metrics.submittedAttempts} awaiting grading</small></article>
+          </div>
+          <div className="analytics-layout">
+            <section className="analytics-assessment-list"><div className="subpanel-head"><h3>Assessment reports</h3><span>{analyticsOverview.assessments.length} shown</span></div>
+              {analyticsOverview.assessments.length===0 && <p className="empty">No assessments match these filters.</p>}
+              {analyticsOverview.assessments.map(item=><button className={"analytics-assessment-item "+(analyticsAssessmentId===item.id?"selected":"")} key={item.id} onClick={()=>openAnalyticsAssessment(item.id)}>
+                <span><strong>{item.title}</strong><small>{item.academicClass?.name || item.organization?.name || "Institution"} · {item._count?.questions ?? 0} questions</small><small>{item.metrics.totalAttempts} attempts · {item.metrics.gradedAttempts} graded</small></span>
+                <span className="analytics-score">{item.metrics.averageScorePercent==null?"—":item.metrics.averageScorePercent+"%"}<small>avg. score</small></span>
+              </button>)}
+            </section>
+            <section className="analytics-detail">
+              {!analyticsDetail ? <div className="workspace-empty"><span>▤</span><h3>Select an assessment</h3><p>Question-level performance and attempt outcomes will appear here.</p></div> : <>
+                <div className="subpanel-head"><div><span className="kicker">QUESTION ANALYSIS</span><h3>{analyticsDetail.assessment.title}</h3><p>{analyticsDetail.assessment.academicClass?.name || analyticsDetail.assessment.organization?.name} · {analyticsDetail.metrics.questionCount} questions</p></div><span className={"status-tag "+analyticsDetail.assessment.status.toLowerCase()}>{analyticsDetail.assessment.status}</span></div>
+                <div className="analytics-detail-kpis"><span><b>{analyticsDetail.metrics.totalAttempts}</b> attempts</span><span><b>{analyticsDetail.metrics.gradedAttempts}</b> graded</span><span><b>{analyticsDetail.metrics.averageScorePercent==null?"—":analyticsDetail.metrics.averageScorePercent+"%"}</b> average</span></div>
+                <div className="score-band-panel"><div className="subpanel-head"><h4>Score distribution</h4><span>Graded attempts</span></div>
+                  <div className="score-bands">{analyticsDetail.metrics.scoreBands.map(band=><div key={band.label}><span>{band.label}</span><strong>{band.count}</strong><div className="score-band-track"><i style={{width:(analyticsDetail.metrics.gradedAttempts ? (band.count/analyticsDetail.metrics.gradedAttempts)*100 : 0)+"%"}}/></div></div>)}</div>
+                </div>
+                <div className="question-metrics-panel"><div className="subpanel-head"><h4>Question outcomes</h4><span>Manager view</span></div>
+                  {analyticsDetail.questions.map((question,index)=><article className="analytics-question-row" key={question.questionId}>
+                    <span className="question-number">{index+1}</span><div className="analytics-question-content"><strong>{question.prompt}</strong><small>{question.questionType.replaceAll("_"," ")} · {question.pointsPossible} points</small><div className="analytics-question-stats"><span>{question.answeredCount} answered</span><span>{question.autoScoredCount ? question.correctnessRatePercent+"% correct" : "Manual grading"}</span><span>{question.manuallyGradedCount} manually graded</span></div><div className="analytics-question-track"><i style={{width:(question.correctnessRatePercent ?? 0)+"%"}}/></div></div>
+                    <b className="question-average">{question.averagePointsAwarded==null?"—":question.averagePointsAwarded}</b>
+                  </article>)}
+                </div>
+                <div className="analytics-attempts-panel"><div className="subpanel-head"><h4>Attempt history</h4><span>{analyticsDetail.attempts.length} recent attempts</span></div>
+                  {analyticsDetail.attempts.length===0 ? <p className="empty">No attempts have been recorded.</p> : <div className="table-wrap"><table><thead><tr><th>Started</th><th>Attempt</th><th>Status</th><th>Score</th></tr></thead><tbody>{analyticsDetail.attempts.map(attempt=><tr key={attempt.id}><td>{fmtDate(attempt.startedAt)}</td><td>{attempt.attemptNumber}</td><td><span className={"status-tag "+attempt.status.toLowerCase()}>{attempt.status}</span></td><td>{attempt.scorePercent==null?"—":attempt.scorePercent+"%"}</td></tr>)}</tbody></table></div>}
+                </div>
+              </>}
+            </section>
+          </div>
+        </>}
+      </section>}
       {view === "assessments" && <section className="data-panel assessment-panel">
         <div className="panel-head"><div><h2>Assessments & quizzes</h2><p>Create question sets, control publishing, review submissions and grade written responses.</p></div><button className="secondary" onClick={() => loadDashboard(token).catch(err => setAssessmentError(err.message))}>Refresh</button></div>
         <div className="assessment-intro"><strong>{assessments.length} assessments</strong><span>·</span><strong>Answer keys hidden from student accounts</strong><span>·</span><strong>Auto-scored objective questions</strong></div>
