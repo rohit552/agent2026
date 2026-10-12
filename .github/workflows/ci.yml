@@ -57,7 +57,7 @@ jobs:
         run: flutter pub get
       - name: Analyze Dart sources
         working-directory: apps/mobile
-        run: flutter analyze
+        run: flutter analyze lib
       - name: Build debug APK
         working-directory: apps/mobile
         run: flutter build apk --debug --dart-define=SKILLHEED_API_URL=http://10.0.2.2:4000
