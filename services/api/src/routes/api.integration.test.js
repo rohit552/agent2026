@@ -446,6 +446,13 @@ test("registration, activation, session revocation and lead workflow", {
   });
   assert.equal(answerChoice.status, 200);
 
+  const incompleteAssessmentSubmit = await fetch(`${base}/api/v1/assessments/attempts/${assessmentAttemptId}/submit`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId }
+  });
+  assert.equal(incompleteAssessmentSubmit.status, 400);
+  assert.equal((await incompleteAssessmentSubmit.json()).error.code, "REQUIRED_ANSWERS_MISSING");
+
   const answerWritten = await fetch(`${base}/api/v1/assessments/attempts/${assessmentAttemptId}/answers/${writtenQuestionId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId },
