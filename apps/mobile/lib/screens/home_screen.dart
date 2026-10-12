@@ -22,6 +22,8 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, dynamic>> _courses = [];
   List<Map<String, dynamic>> _attendance = [];
   List<Map<String, dynamic>> _assessments = [];
+  List<Map<String, dynamic>> _assessmentHistory = [];
+  Map<String, dynamic> _assessmentHistorySummary = {};
 
   @override
   void initState() {
@@ -55,14 +57,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadEducation() async {
     if (_currentUser == null) {
-      if (mounted) setState(() { _classes = []; _courses = []; _attendance = []; _assessments = []; _educationError = ''; _educationLoading = false; });
+      if (mounted) setState(() { _classes = []; _courses = []; _attendance = []; _assessments = []; _assessmentHistory = []; _assessmentHistorySummary = {}; _educationError = ''; _educationLoading = false; });
       return;
     }
     setState(() { _educationLoading = true; _educationError = ''; });
     try {
       final summary = await _auth.educationSummary();
+      Map<String, dynamic> historySummary = {};
+      List<Map<String, dynamic>> assessmentHistory = [];
+      if ((summary['activeRole'] ?? '').toString() == 'STUDENT') {
+        final historyResponse = await _auth.assessmentHistory();
+        historySummary = Map<String, dynamic>.from(historyResponse['summary'] as Map? ?? const {});
+        assessmentHistory = (historyResponse['attempts'] as List<dynamic>? ?? <dynamic>[])
+            .map((item) => Map<String, dynamic>.from(item as Map)).toList();
+      }
       if (!mounted) return;
       setState(() {
+        _assessmentHistorySummary = historySummary;
+        _assessmentHistory = assessmentHistory;
         _classes = (summary['classes'] as List<dynamic>? ?? <dynamic>[])
             .map((item) => Map<String, dynamic>.from(item as Map)).toList();
         _courses = (summary['courses'] as List<dynamic>? ?? <dynamic>[])
@@ -229,7 +241,7 @@ class _HomeScreenState extends State<HomeScreen> {
               await _auth.logout();
               if (!mounted || !sheetContext.mounted) return;
               Navigator.of(sheetContext).pop();
-              setState(() { _currentUser = null; _classes = []; _courses = []; _attendance = []; _assessments = []; _educationError = ''; });
+              setState(() { _currentUser = null; _classes = []; _courses = []; _attendance = []; _assessments = []; _assessmentHistory = []; _assessmentHistorySummary = {}; _educationError = ''; });
             },
             icon: const Icon(Icons.logout),
             label: const Text('Sign out'),
@@ -421,6 +433,36 @@ class _HomeScreenState extends State<HomeScreen> {
                       ]),
                     ),
                   )),
+                ],
+                if (_assessmentHistory.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    const Expanded(child: Text('Assessment history', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF243652)))),
+                    Text('${_assessmentHistorySummary['gradedAttempts'] ?? 0} graded', style: const TextStyle(fontSize: 9, color: Color(0xFF71829C))),
+                  ]),
+                  const SizedBox(height: 7),
+                  ..._assessmentHistory.take(5).map((attempt) {
+                    final assessment = attempt['assessment'] is Map ? Map<String, dynamic>.from(attempt['assessment'] as Map) : <String, dynamic>{};
+                    final scorePercent = attempt['scorePercent'];
+                    final status = attempt['status']?.toString() ?? 'UNKNOWN';
+                    final statusColor = status == 'GRADED' ? const Color(0xFF087847) : status == 'SUBMITTED' ? const Color(0xFF946200) : const Color(0xFF71829C);
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 7),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: const Color(0xFFF8FAFF), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE7EDF6))),
+                      child: Row(children: [
+                        const Icon(Icons.history_rounded, color: Color(0xFF1769FF), size: 18),
+                        const SizedBox(width: 9),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(assessment['title']?.toString() ?? 'Assessment', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF243652))),
+                          const SizedBox(height: 4),
+                          Text('Attempt ${attempt['attemptNumber'] ?? 1} · ${status.replaceAll('_',' ')} · ${DateTime.tryParse(attempt['startedAt']?.toString() ?? '')?.toLocal().toString().split(' ').first ?? '—'}', style: const TextStyle(fontSize: 9, color: Color(0xFF71829C))),
+                        ])),
+                        const SizedBox(width: 8),
+                        Text(scorePercent == null ? (status == 'SUBMITTED' ? 'Pending grade' : '—') : '$scorePercent%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: statusColor)),
+                      ]),
+                    );
+                  }),
                 ],
                 if (_attendance.isNotEmpty) ...[
                   const SizedBox(height: 6),

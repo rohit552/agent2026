@@ -498,6 +498,37 @@ test("registration, activation, session revocation and lead workflow", {
   assert.equal(secondAttempt.status, 409);
   assert.equal((await secondAttempt.json()).error.code, "ATTEMPT_LIMIT_REACHED");
 
+  const analyticsResponse = await fetch(`${base}/api/v1/assessment-analytics/overview?organizationId=${organizationId}`, { headers: { Authorization: `Bearer ${adminToken}` } });
+  assert.equal(analyticsResponse.status, 200);
+  const analyticsData = (await analyticsResponse.json()).data;
+  assert.ok(analyticsData.metrics.totalAssessments >= 1);
+  assert.ok(analyticsData.assessments.some(item => item.id === assessmentId));
+
+  const assessmentReport = await fetch(`${base}/api/v1/assessment-analytics/assessments/${assessmentId}`, { headers: { Authorization: `Bearer ${adminToken}` } });
+  assert.equal(assessmentReport.status, 200);
+  const reportData = (await assessmentReport.json()).data;
+  assert.equal(reportData.metrics.totalAttempts, 1);
+  assert.equal(reportData.metrics.averageScorePercent, 80);
+  assert.equal(reportData.questions.find(item => item.questionId === choiceQuestionId).correctCount, 1);
+  assert.equal(reportData.questions.find(item => item.questionId === writtenQuestionId).manuallyGradedCount, 1);
+
+  const classReport = await fetch(`${base}/api/v1/assessment-analytics/classes/${academicClassId}`, { headers: { Authorization: `Bearer ${teacherToken}`, "X-SkillHeed-Profile-Id": teacherProfileId } });
+  assert.equal(classReport.status, 200);
+  const personalReport = await fetch(`${base}/api/v1/assessment-analytics/me`, { headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId } });
+  assert.equal(personalReport.status, 200);
+  assert.equal((await personalReport.json()).data.attempts[0].scorePercent, 80);
+
+  const crossTenantAnalyticsDenied = await fetch(`${base}/api/v1/assessment-analytics/overview?organizationId=${otherOrganizationId}`, { headers: { Authorization: `Bearer ${teacherToken}`, "X-SkillHeed-Profile-Id": teacherProfileId } });
+  assert.equal(crossTenantAnalyticsDenied.status, 403);
+
+  const invertedAnalyticsDates = await fetch(`${base}/api/v1/assessment-analytics/overview?from=2026-10-20&to=2026-10-10`, { headers: { Authorization: `Bearer ${adminToken}` } });
+  assert.equal(invertedAnalyticsDates.status, 400);
+
+  const adminPersonalHistoryDenied = await fetch(`${base}/api/v1/assessment-analytics/me`, { headers: { Authorization: `Bearer ${adminToken}` } });
+  assert.equal(adminPersonalHistoryDenied.status, 403);
+
+  const privateReportDenied = await fetch(`${base}/api/v1/assessment-analytics/assessments/${assessmentId}`, { headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId } });
+  assert.equal(privateReportDenied.status, 403);
   await prisma.user.update({ where: { id: userId }, data: { status: "SUSPENDED" } });
   const revoked = await fetch(`${base}/api/v1/auth/me`, { headers: { Authorization: `Bearer ${session.accessToken}` } });
   assert.equal(revoked.status, 401);

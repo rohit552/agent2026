@@ -187,3 +187,54 @@ td select{border:1px solid #dce5f2;border-radius:8px;padding:8px 7px;background:
 .grade-row label:last-of-type{grid-column:1/-1}
 @media(max-width:1100px){.assessment-layout{grid-template-columns:minmax(0,1fr)}.assessment-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:680px){.assessment-layout{padding:14px;gap:16px}.assessment-form-grid{grid-template-columns:1fr}.assessment-item-actions{padding-left:12px}.attempt-item{align-items:flex-start}.attempt-score{white-space:normal}.grade-row{grid-template-columns:1fr}.grade-row label:first-of-type,.grade-row label:last-of-type{grid-column:1}.assessment-intro span{display:none}}
+
+/* Assessment analytics and results */
+.analytics-panel{padding-bottom:22px}
+.analytics-filter-form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:11px;align-items:end;padding:17px 20px;background:#fafcff;border-bottom:1px solid var(--line)}
+.analytics-filter-form label{display:grid;gap:7px;min-width:0;font-size:10px;font-weight:750;color:#4b5c75}
+.analytics-filter-form input,.analytics-filter-form select{width:100%;min-width:0;padding:10px 11px;border:1px solid #dfe7f2;border-radius:9px;background:#fff;color:#253651;font:500 10px Inter,system-ui,sans-serif;outline:none}
+.analytics-filter-form input:focus,.analytics-filter-form select:focus{border-color:#80b2ff;box-shadow:0 0 0 3px #1769ff12}
+.analytics-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:18px 20px;border-bottom:1px solid var(--line)}
+.analytics-kpis article{min-width:0;padding:15px;border:1px solid var(--line);border-radius:13px;background:#fff}
+.analytics-kpis article>span{display:block;font-size:10px;color:#7f8ca1;font-weight:700}
+.analytics-kpis article>strong{display:block;margin-top:8px;font-size:23px;letter-spacing:-.7px;font-weight:850;color:#182845;overflow-wrap:anywhere}
+.analytics-kpis article>small{display:block;margin-top:7px;font-size:9px;color:#8995a8;line-height:1.5}
+.analytics-empty{display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;min-height:265px;padding:28px}
+.analytics-empty>span{display:grid;place-items:center;width:48px;height:48px;border-radius:15px;background:#eaf3ff;color:#1769ff;font-size:25px}
+.analytics-empty h3{margin:14px 0 7px;font:800 14px "Plus Jakarta Sans",sans-serif;color:#243652}
+.analytics-empty p{max-width:440px;font-size:10px;line-height:1.8;color:#8390a4;margin:0 0 15px}
+.analytics-layout{display:grid;grid-template-columns:minmax(270px,.78fr) minmax(0,1.5fr);gap:18px;padding:20px}
+.analytics-assessment-list,.analytics-detail{min-width:0}
+.analytics-assessment-item{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:13px;border:1px solid var(--line);border-radius:11px;background:#fff;text-align:left;cursor:pointer;margin-bottom:8px;color:inherit}
+.analytics-assessment-item:hover,.analytics-assessment-item.selected{border-color:#a7c9ff;background:#f4f8ff}
+.analytics-assessment-item>span:first-child{display:grid;gap:5px;min-width:0}
+.analytics-assessment-item strong{font-size:10px;line-height:1.5;color:#2a3e5a;overflow-wrap:anywhere}
+.analytics-assessment-item small{font-size:9px;color:#8592a7;line-height:1.45;overflow-wrap:anywhere}
+.analytics-score{flex:0 0 auto;font-size:16px;font-weight:850;color:#1769ff;text-align:right}
+.analytics-score small{display:block;margin-top:4px;font-size:8px;font-weight:600}
+.analytics-detail>.subpanel-head{align-items:flex-start}
+.analytics-detail-kpis{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.analytics-detail-kpis span{border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:9px;color:#7d899d}
+.analytics-detail-kpis b{color:#1769ff;font-size:13px;margin-right:4px}
+.score-band-panel,.question-metrics-panel,.analytics-attempts-panel{padding:14px;border:1px solid var(--line);border-radius:13px;margin-top:13px;min-width:0}
+.score-bands{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}
+.score-bands>div{display:grid;gap:7px;min-width:0}
+.score-bands span{font-size:8px;line-height:1.4;color:#7a879b}
+.score-bands strong{font-size:16px;color:#2c405e}
+.score-band-track,.analytics-question-track{height:5px;background:#edf2f9;border-radius:5px;overflow:hidden}
+.score-band-track i,.analytics-question-track i{display:block;height:100%;background:#1769ff;border-radius:5px}
+.analytics-question-row{display:flex;gap:10px;padding:13px 0;border-top:1px solid #edf1f7;align-items:flex-start}
+.analytics-question-content{min-width:0;flex:1}
+.analytics-question-content>strong{display:block;font-size:10px;line-height:1.6;color:#30445f;overflow-wrap:anywhere}
+.analytics-question-content>small{display:block;margin-top:4px;font-size:8px;text-transform:uppercase;letter-spacing:.3px;color:#8794a8}
+.analytics-question-stats{display:flex;flex-wrap:wrap;gap:8px;margin:9px 0}
+.analytics-question-stats span{font-size:8px;color:#708099;background:#f4f7fb;padding:5px 7px;border-radius:6px}
+.analytics-question-track{margin-top:7px}
+.question-average{min-width:28px;text-align:right;color:#243955;font-size:12px}
+.analytics-attempts-panel .table-wrap{max-width:100%;overflow:auto}
+.analytics-attempts-panel table{min-width:390px}
+.analytics-attempts-panel td,.analytics-attempts-panel th{padding:10px 9px}
+@media(max-width:1150px){.analytics-filter-form{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-layout{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:680px){.analytics-filter-form{grid-template-columns:1fr;padding:14px}.analytics-kpis{padding:14px;gap:8px}.analytics-kpis article{padding:11px}.analytics-kpis article>strong{font-size:20px}.analytics-layout{padding:14px;gap:17px}.score-bands{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:13px}.analytics-assessment-item{align-items:flex-start}.analytics-score{font-size:13px}}
+
+.analytics-sample-note{margin:0 0 10px;padding:9px 11px;border:1px solid #dce8fb;border-radius:8px;background:#f4f8ff;color:#687c9a;font-size:9px;line-height:1.65}

@@ -9,6 +9,7 @@ const modules = [
   ["📥", "Website enquiries", "leads"],
   ["📚", "Learning", "learning"],
   ["📝", "Assessments", "assessments"],
+  ["📊", "Assessment analytics", "analytics"],
   ["↗", "Hire", "hire"],
   ["🤝", "Partners & sales", "partners"],
   ["⚙", "Operations", "operations"]
@@ -36,6 +37,12 @@ function App() {
   const [assessmentAttempts, setAssessmentAttempts] = useState([]);
   const [selectedAttemptDetail, setSelectedAttemptDetail] = useState(null);
   const [assessmentError, setAssessmentError] = useState("");
+  const [analyticsOverview, setAnalyticsOverview] = useState(null);
+  const [analyticsDetail, setAnalyticsDetail] = useState(null);
+  const [analyticsAssessmentId, setAnalyticsAssessmentId] = useState("");
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState("");
+  const [analyticsFilters, setAnalyticsFilters] = useState({ organizationId: "", classId: "", from: "", to: "" });
   const [assessmentCreateForm, setAssessmentCreateForm] = useState({ organizationId: "", classId: "", title: "", description: "", instructions: "", timeLimitSeconds: "900", maxAttempts: "1" });
   const [questionForm, setQuestionForm] = useState({ prompt: "", questionType: "SINGLE_CHOICE", options: "a|Option A\nb|Option B", correctAnswers: "a", explanation: "", points: "1" });
   const [manualGradeValues, setManualGradeValues] = useState({});
@@ -510,6 +517,53 @@ function App() {
     }
   }
 
+
+  async function loadAssessmentAnalytics(event) {
+    event?.preventDefault?.();
+    setAnalyticsLoading(true);
+    setAnalyticsError("");
+    try {
+      const params = new URLSearchParams();
+      for (const [key, value] of Object.entries(analyticsFilters)) {
+        if (value) params.set(key, value);
+      }
+      const response = await apiRequest(`/api/v1/assessment-analytics/overview${params.toString() ? `?${params.toString()}` : ""}`, { token });
+      setAnalyticsOverview(response.data);
+      const currentId = analyticsAssessmentId && response.data.assessments.some(item => item.id === analyticsAssessmentId)
+        ? analyticsAssessmentId
+        : response.data.assessments[0]?.id ?? "";
+      setAnalyticsAssessmentId(currentId);
+      if (currentId) {
+        const detail = await apiRequest(`/api/v1/assessment-analytics/assessments/${currentId}`, { token });
+        setAnalyticsDetail(detail.data);
+      } else {
+        setAnalyticsDetail(null);
+      }
+    } catch (err) {
+      setAnalyticsError(err.message || "Could not load assessment analytics.");
+      setAnalyticsOverview(null);
+      setAnalyticsDetail(null);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }
+
+  async function openAnalyticsAssessment(assessmentId) {
+    setAnalyticsAssessmentId(assessmentId);
+    setAnalyticsError("");
+    if (!assessmentId) {
+      setAnalyticsDetail(null);
+      return;
+    }
+    try {
+      const response = await apiRequest(`/api/v1/assessment-analytics/assessments/${assessmentId}`, { token });
+      setAnalyticsDetail(response.data);
+    } catch (err) {
+      setAnalyticsError(err.message || "Could not load this assessment report.");
+      setAnalyticsDetail(null);
+    }
+  }
+
   async function updateUserStatus(target, status) {
     setBusyId(target.id); setActionMessage(""); setError("");
     try {
@@ -556,10 +610,59 @@ function App() {
       <header className="page-head"><div><span className="kicker">SKILLHEED OPERATIONS</span><h1>{view === "overview" ? `Good to see you, ${user.fullName?.split(" ")[0]}.` : modules.find(m => m[2] === view)?.[1] || "Workspace"}</h1><p>Secure operations workspace for SkillHeed platform administrators.</p></div><div className="header-actions"><span className="signed">● API session active</span><button className="secondary" onClick={() => loadDashboard(token).catch(e => setActionMessage(e.message))}>Refresh data</button><button className="secondary" onClick={signOut}>Sign out</button></div></header>
       <section className="notice"><b>Administrator access</b><span>Changes are checked by the API and important account/enquiry status changes are written to the audit log.</span></section>
       {actionMessage && <p className="action-message" role="status">{actionMessage}</p>}
-      {view === "overview" && <><section className="stat-grid"><article><span>Total users</span><strong>{overview?.users ?? "—"}</strong><small>Registered platform accounts</small></article><article><span>Active accounts</span><strong>{overview?.activeUsers ?? "—"}</strong><small>Accounts currently active</small></article><article><span>Pending verification</span><strong>{overview?.pendingUsers ?? "—"}</strong><small>Awaiting review or verification</small></article><article><span>Open enquiries</span><strong>{overview?.openLeads ?? "—"}</strong><small>{overview?.leads ?? "—"} total · {overview?.institutions ?? "—"} institutions</small></article></section><section className="modules"><div className="module-head"><div><h2>Management workspaces</h2><p>Use a workspace to review live records from the API.</p></div><span className="pill">Connected</span></div><div className="module-grid">{modules.map(([icon,name,key])=><button className="module-card" onClick={() => setView(key)} key={key}><div className="module-icon">{icon}</div><h3>{name}</h3><p>{({users:"Account records and activation workflow",institutions:"Registered organizations and branches",leads:"Website leads and follow-up status",learning:"Academic classes, student enrolments, teacher assignments, attendance and course delivery",assessments:"Timed quizzes, answer-key protection, automatic scoring and written-response grading",hire:"Jobs and employers — upcoming integration",partners:"Partners and territory workflows — upcoming integration",operations:"Guardian/student link verification and operations workflows"})[key]}</p><span className={["users","institutions","leads","operations","learning","assessments"].includes(key)?"available":"planned"}>{["users","institutions","leads","operations","learning","assessments"].includes(key)?"API connected":"Integration planned"}</span></button>)}</div></section></>}
+      {view === "overview" && <><section className="stat-grid"><article><span>Total users</span><strong>{overview?.users ?? "—"}</strong><small>Registered platform accounts</small></article><article><span>Active accounts</span><strong>{overview?.activeUsers ?? "—"}</strong><small>Accounts currently active</small></article><article><span>Pending verification</span><strong>{overview?.pendingUsers ?? "—"}</strong><small>Awaiting review or verification</small></article><article><span>Open enquiries</span><strong>{overview?.openLeads ?? "—"}</strong><small>{overview?.leads ?? "—"} total · {overview?.institutions ?? "—"} institutions</small></article></section><section className="modules"><div className="module-head"><div><h2>Management workspaces</h2><p>Use a workspace to review live records from the API.</p></div><span className="pill">Connected</span></div><div className="module-grid">{modules.map(([icon,name,key])=><button className="module-card" onClick={() => setView(key)} key={key}><div className="module-icon">{icon}</div><h3>{name}</h3><p>{({users:"Account records and activation workflow",institutions:"Registered organizations and branches",leads:"Website leads and follow-up status",learning:"Academic classes, student enrolments, teacher assignments, attendance and course delivery",assessments:"Timed quizzes, answer-key protection, automatic scoring and written-response grading",analytics:"Assessment performance, completion, score ranges and question-level outcomes",hire:"Jobs and employers — upcoming integration",partners:"Partners and territory workflows — upcoming integration",operations:"Guardian/student link verification and operations workflows"})[key]}</p><span className={["users","institutions","leads","operations","learning","assessments","analytics"].includes(key)?"available":"planned"}>{["users","institutions","leads","operations","learning","assessments","analytics"].includes(key)?"API connected":"Integration planned"}</span></button>)}</div></section></>}
 
 
 
+
+      {view === "analytics" && <section className="data-panel analytics-panel">
+        <div className="panel-head"><div><h2>Assessment performance</h2><p>Review completion, average scores, score ranges and question-level outcomes for your authorized scope.</p></div><button className="secondary" disabled={analyticsLoading} onClick={() => loadAssessmentAnalytics()}>Refresh reports</button></div>
+        <form className="analytics-filter-form" onSubmit={loadAssessmentAnalytics}>
+          <label>Institution<select value={analyticsFilters.organizationId} onChange={event=>setAnalyticsFilters(current=>({...current,organizationId:event.target.value,classId:""}))}><option value="">All permitted institutions</option>{organizations.filter(org=>org.status==="ACTIVE").map(org=><option key={org.id} value={org.id}>{org.name}</option>)}</select></label>
+          <label>Class / batch<select value={analyticsFilters.classId} onChange={event=>setAnalyticsFilters(current=>({...current,classId:event.target.value}))}><option value="">All classes in scope</option>{classes.filter(cls=>!analyticsFilters.organizationId||cls.organizationId===analyticsFilters.organizationId).map(cls=><option value={cls.id} key={cls.id}>{cls.name} · {cls.academicYear}</option>)}</select></label>
+          <label>Started from<input type="date" value={analyticsFilters.from} onChange={event=>setAnalyticsFilters(current=>({...current,from:event.target.value}))}/></label>
+          <label>Started to<input type="date" value={analyticsFilters.to} onChange={event=>setAnalyticsFilters(current=>({...current,to:event.target.value}))}/></label>
+          <button className="primary-action" type="submit" disabled={analyticsLoading}>{analyticsLoading?"Loading reports…":"Load analytics"}</button>
+        </form>
+        {analyticsError && <p className="education-error" role="alert">{analyticsError}</p>}
+        {!analyticsOverview && <div className="analytics-empty"><span>◷</span><h3>Load assessment reports</h3><p>Choose an institution, class, or date range and load reports to see assessment outcomes within your server-authorized scope.</p><button className="primary-action" disabled={analyticsLoading} onClick={()=>loadAssessmentAnalytics()}>{analyticsLoading?"Loading…":"Load reports"}</button></div>}
+        {analyticsOverview && <>
+          {analyticsOverview.metrics.attemptSampleLimitReached && <p className="analytics-sample-note">The attempt totals use the latest 10,000 attempts; narrower filters or exports can be added for larger reporting windows.</p>}
+          <div className="analytics-kpis">
+            <article><span>Assessments</span><strong>{analyticsOverview.metrics.totalAssessments}</strong><small>{analyticsOverview.metrics.publishedAssessments} published · {analyticsOverview.metrics.draftAssessments} draft</small></article>
+            <article><span>Attempts</span><strong>{analyticsOverview.metrics.totalAttempts}</strong><small>{analyticsOverview.metrics.gradedAttempts} graded · {analyticsOverview.metrics.inProgressAttempts} in progress</small></article>
+            <article><span>Average score</span><strong>{analyticsOverview.metrics.averageScorePercent == null ? "—" : analyticsOverview.metrics.averageScorePercent+"%"}</strong><small>Graded attempts only</small></article>
+            <article><span>Completion</span><strong>{analyticsOverview.metrics.completionRatePercent == null ? "—" : analyticsOverview.metrics.completionRatePercent+"%"}</strong><small>{analyticsOverview.metrics.submittedAttempts} awaiting grading</small></article>
+          </div>
+          <div className="analytics-layout">
+            <section className="analytics-assessment-list"><div className="subpanel-head"><h3>Assessment reports</h3><span>{analyticsOverview.assessments.length} shown</span></div>
+              {analyticsOverview.assessments.length===0 && <p className="empty">No assessments match these filters.</p>}
+              {analyticsOverview.assessments.map(item=><button className={"analytics-assessment-item "+(analyticsAssessmentId===item.id?"selected":"")} key={item.id} onClick={()=>openAnalyticsAssessment(item.id)}>
+                <span><strong>{item.title}</strong><small>{item.academicClass?.name || item.organization?.name || "Institution"} · {item._count?.questions ?? 0} questions</small><small>{item.metrics.totalAttempts} attempts · {item.metrics.gradedAttempts} graded</small></span>
+                <span className="analytics-score">{item.metrics.averageScorePercent==null?"—":item.metrics.averageScorePercent+"%"}<small>avg. score</small></span>
+              </button>)}
+            </section>
+            <section className="analytics-detail">
+              {!analyticsDetail ? <div className="workspace-empty"><span>▤</span><h3>Select an assessment</h3><p>Question-level performance and attempt outcomes will appear here.</p></div> : <>
+                <div className="subpanel-head"><div><span className="kicker">QUESTION ANALYSIS</span><h3>{analyticsDetail.assessment.title}</h3><p>{analyticsDetail.assessment.academicClass?.name || analyticsDetail.assessment.organization?.name} · {analyticsDetail.metrics.questionCount} questions</p></div><span className={"status-tag "+analyticsDetail.assessment.status.toLowerCase()}>{analyticsDetail.assessment.status}</span></div>
+                <div className="analytics-detail-kpis"><span><b>{analyticsDetail.metrics.totalAttempts}</b> attempts</span><span><b>{analyticsDetail.metrics.gradedAttempts}</b> graded</span><span><b>{analyticsDetail.metrics.averageScorePercent==null?"—":analyticsDetail.metrics.averageScorePercent+"%"}</b> average</span></div>
+                <div className="score-band-panel"><div className="subpanel-head"><h4>Score distribution</h4><span>Graded attempts</span></div>{analyticsDetail.metrics.attemptSampleLimitReached && <p className="analytics-sample-note">Showing the most recent 500 attempts; older attempts are not included in this question report.</p>}
+                  <div className="score-bands">{analyticsDetail.metrics.scoreBands.map(band=><div key={band.label}><span>{band.label}</span><strong>{band.count}</strong><div className="score-band-track"><i style={{width:(analyticsDetail.metrics.gradedAttempts ? (band.count/analyticsDetail.metrics.gradedAttempts)*100 : 0)+"%"}}/></div></div>)}</div>
+                </div>
+                <div className="question-metrics-panel"><div className="subpanel-head"><h4>Question outcomes</h4><span>Manager view</span></div>
+                  {analyticsDetail.questions.map((question,index)=><article className="analytics-question-row" key={question.questionId}>
+                    <span className="question-number">{index+1}</span><div className="analytics-question-content"><strong>{question.prompt}</strong><small>{question.questionType.replaceAll("_"," ")} · {question.pointsPossible} points</small><div className="analytics-question-stats"><span>{question.answeredCount} answered</span><span>{question.autoScoredCount ? question.correctnessRatePercent+"% correct" : "Manual grading"}</span><span>{question.manuallyGradedCount} manually graded</span></div><div className="analytics-question-track"><i style={{width:(question.correctnessRatePercent ?? 0)+"%"}}/></div></div>
+                    <b className="question-average">{question.averagePointsAwarded==null?"—":question.averagePointsAwarded}</b>
+                  </article>)}
+                </div>
+                <div className="analytics-attempts-panel"><div className="subpanel-head"><h4>Attempt history</h4><span>{analyticsDetail.attempts.length} recent attempts</span></div>
+                  {analyticsDetail.attempts.length===0 ? <p className="empty">No attempts have been recorded.</p> : <div className="table-wrap"><table><thead><tr><th>Started</th><th>Attempt</th><th>Status</th><th>Score</th></tr></thead><tbody>{analyticsDetail.attempts.map(attempt=><tr key={attempt.id}><td>{fmtDate(attempt.startedAt)}</td><td>{attempt.attemptNumber}</td><td><span className={"status-tag "+attempt.status.toLowerCase()}>{attempt.status}</span></td><td>{attempt.scorePercent==null?"—":attempt.scorePercent+"%"}</td></tr>)}</tbody></table></div>}
+                </div>
+              </>}
+            </section>
+          </div>
+        </>}
+      </section>}
       {view === "assessments" && <section className="data-panel assessment-panel">
         <div className="panel-head"><div><h2>Assessments & quizzes</h2><p>Create question sets, control publishing, review submissions and grade written responses.</p></div><button className="secondary" onClick={() => loadDashboard(token).catch(err => setAssessmentError(err.message))}>Refresh</button></div>
         <div className="assessment-intro"><strong>{assessments.length} assessments</strong><span>·</span><strong>Answer keys hidden from student accounts</strong><span>·</span><strong>Auto-scored objective questions</strong></div>
@@ -675,7 +778,7 @@ function App() {
 
       {view === "operations" && <section className="data-panel"><div className="panel-head"><div><h2>Guardian / student link review</h2><p>Requests remain pending until an authorized review is completed. Approval and revocation are audited.</p></div><button className="secondary" onClick={() => loadDashboard(token).catch(e => setActionMessage(e.message))}>Reload</button></div><div className="table-wrap"><table><thead><tr><th>Parent / guardian</th><th>Student</th><th>Requested</th><th>Consent / status</th></tr></thead><tbody>{guardianLinks.map(link=><tr key={link.id}><td><strong>{link.guardian?.fullName || "Unknown guardian"}</strong><small>{link.guardian?.email || "—"}</small></td><td><strong>{link.student?.fullName || "Unknown student"}</strong><small>{link.student?.email || "—"}</small></td><td>{fmtDate(link.createdAt)}</td><td><select aria-label={"Guardian link status for "+(link.guardian?.fullName || "guardian")} value={link.status} disabled={busyId===link.id} onChange={event=>updateGuardianLinkStatus(link,event.target.value)}>{["PENDING","APPROVED","REVOKED"].map(status=><option key={status} value={status}>{status}</option>)}</select>{link.consentAt && <small className="consent-date">Approved {fmtDate(link.consentAt)}</small>}</td></tr>)}</tbody></table>{guardianLinks.length===0&&<p className="empty">There are no guardian/student link requests.</p>}</div></section>}
 
-      {!["overview","users","leads","institutions","operations","learning","assessments"].includes(view) && <section className="data-panel placeholder"><div className="module-icon">◈</div><h2>{modules.find(m=>m[2]===view)?.[1] || "Workspace"}</h2><p>This workspace is planned. Add its data model, authorization policies, CRUD API, tests and operational workflows before using it with live records.</p><button className="secondary" onClick={()=>setView("overview")}>Back to overview</button></section>}
+      {!["overview","users","leads","institutions","operations","learning","assessments","analytics"].includes(view) && <section className="data-panel placeholder"><div className="module-icon">◈</div><h2>{modules.find(m=>m[2]===view)?.[1] || "Workspace"}</h2><p>This workspace is planned. Add its data model, authorization policies, CRUD API, tests and operational workflows before using it with live records.</p><button className="secondary" onClick={()=>setView("overview")}>Back to overview</button></section>}
       <section className="security"><div><h3>Security and access</h3><p>The API validates the active account and role on each request. Keep secrets off the frontend, limit access to this admin hostname, and enable MFA before production launch.</p></div><span>RBAC</span></section>
     </main>
 
