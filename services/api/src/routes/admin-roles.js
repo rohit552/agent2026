@@ -5,7 +5,7 @@ import { requireAuth, requireRoles } from "../middleware/auth.js";
 import { PROFILE_CATALOG, PROFILE_BY_KEY, PRIVILEGED_PROFILE_TYPES } from "../domain/profile-catalog.js";
 
 export const adminRolesRouter = Router();
-adminRolesRouter.use(requireAuth, requireRoles("PLATFORM_ADMIN", "SUPER_ADMIN"));
+adminRolesRouter.use(requireAuth);
 
 const scopeSchema = z.object({
   profileType: z.string().min(2),
@@ -44,11 +44,11 @@ async function isWithinTerritory(territoryId, ancestorId) {
   return false;
 }
 
-adminRolesRouter.get("/profile-catalog", (_req, res) => {
+adminRolesRouter.get("/profile-catalog", requireRoles("PLATFORM_ADMIN", "SUPER_ADMIN"), (_req, res) => {
   return res.json({ data: { profiles: PROFILE_CATALOG } });
 });
 
-adminRolesRouter.get("/users/:userId/profile-roles", async (req, res, next) => {
+adminRolesRouter.get("/users/:userId/profile-roles", requireRoles("PLATFORM_ADMIN", "SUPER_ADMIN"), async (req, res, next) => {
   try {
     const exists = await prisma.user.findUnique({ where: { id: req.params.userId }, select: { id: true } });
     if (!exists) return res.status(404).json({ error: { code: "USER_NOT_FOUND", message: "User not found" } });
