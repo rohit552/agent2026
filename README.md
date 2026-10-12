@@ -219,3 +219,30 @@ All routes are under `/api/v1/assessments` and require an authenticated profile.
 
 ### Current limits
 This is not a complete exam/proctoring suite yet. Question randomization is a stored assessment setting but is not applied to the learner question order in this release. The current attempt screen displays the expiry timestamp, while the API enforces the deadline; there is no synchronized live countdown yet. There is no webcam/screen proctoring, anti-cheat detection, negative marking, section-wise timer, question bank reuse, bulk import, question editing/removal after creation, review/appeal workflow, advanced psychometric/IQ scoring, offline attempt cache, or analytics/reporting dashboard. Add security and concurrency testing against staging before a real exam is scheduled.
+
+## Phase 5 — Assessment Analytics
+
+Assessment Analytics provides scoped reporting on top of the assessment attempt lifecycle. It uses existing assessment and answer records; no separate reporting tables are required.
+
+### API
+All endpoints are under `/api/v1/assessment-analytics` and require authentication.
+
+- `GET /overview` — aggregate assessment inventory, question count, attempts, completion/graded counts, average percentage for graded attempts, and per-assessment metrics. Optional filters: `organizationId`, `branchId`, `classId`, `from`, and `to`. Date bounds filter by attempt start date and use inclusive calendar days.
+- `GET /classes/:classId` — class-wide assessment/attempt summary, available to administrators in the assigned institution/branch and teachers assigned to that class.
+- `GET /assessments/:assessmentId` — assessment metrics, per-question answered/correct/auto-scored/manually-graded counts, average points awarded, correctness rate and aggregate score bands. Individual responses and names are not returned.
+- `GET /me` — the selected student's personal attempt history, score percentage only after final grading, and personal status counts.
+
+### Reporting rules
+- All manager routes enforce server-side profile and class scope. A teacher must be assigned to the class being reported. Institution administrators are restricted to their organization's branch or organization scope.
+- Students cannot open class or institution-wide reports; they use `/me` for their own attempt history.
+- The overview validates calendar date filters and rejects inverted date ranges.
+- Score summaries are based on graded attempts with a positive possible score. Non-final submissions do not reveal a student score.
+- The question report returns aggregate statistics only, never the answer text or identity of individual learners.
+- Completion rate counts submitted or graded attempts as completed; expired/in-progress attempts remain separate.
+
+### UI
+- **Admin → Assessment analytics:** filter by institution, class and attempt-start date range; view overall KPIs, per-assessment average scores, score bands, question outcome stats and attempt status/score history.
+- **Flutter student dashboard:** shows recent attempt history and displays percentages only once results are graded, while written responses are awaiting teacher review.
+
+### Current limits
+Analytics reports are capped to the most recent 200–500 records per view; they are not yet a paginated export system. These are descriptive metrics rather than psychometric analysis. There is no pass threshold configuration, cohort comparison, CSV/PDF export, scheduled report delivery, guardian analytics or school benchmarking across separately authorized tenants.
