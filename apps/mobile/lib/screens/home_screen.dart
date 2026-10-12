@@ -70,7 +70,7 @@ class _HomeScreenState extends State<HomeScreen> {
           OutlinedButton.icon(
             onPressed: () async {
               await _auth.logout();
-              if (!mounted) return;
+              if (!mounted || !sheetContext.mounted) return;
               Navigator.of(sheetContext).pop();
               setState(() => _currentUser = null);
             },
