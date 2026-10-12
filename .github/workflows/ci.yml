@@ -11,12 +11,37 @@ permissions:
 jobs:
   node:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://skillheed:ci_password@localhost:5432/skillheed?schema=public
+      JWT_SECRET: ci_only_secret_do_not_use_in_production_32_chars_minimum
+      NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
       - run: npm install
+      - run: npm run db:generate
       - run: npm run lint
       - run: npm run build
       - run: npm test
+
+  flutter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Generate native Android project files
+        working-directory: apps/mobile
+        run: flutter create --platforms=android --project-name=skillheed_mobile --no-pub .
+      - name: Resolve mobile dependencies
+        working-directory: apps/mobile
+        run: flutter pub get
+      - name: Analyze Dart sources
+        working-directory: apps/mobile
+        run: flutter analyze
+      - name: Build debug APK
+        working-directory: apps/mobile
+        run: flutter build apk --debug --dart-define=SKILLHEED_API_URL=http://10.0.2.2:4000
