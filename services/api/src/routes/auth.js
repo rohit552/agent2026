@@ -90,7 +90,18 @@ authRouter.get("/me", requireAuth, async (req, res, next) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.auth.userId },
-      select: { id: true, fullName: true, email: true, phone: true, role: true, status: true, createdAt: true, profile: true }
+      select: {
+        id: true, fullName: true, email: true, phone: true, role: true, status: true, createdAt: true, profile: true,
+        profileRoles: {
+          where: { active: true },
+          include: {
+            organization: { select: { id: true, name: true, slug: true, type: true } },
+            branch: { select: { id: true, name: true, code: true } },
+            territory: { select: { id: true, name: true, code: true, level: true, parentId: true } }
+          },
+          orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }]
+        }
+      }
     });
     if (!user || user.status !== "ACTIVE") {
       return res.status(401).json({ error: { code: "ACCOUNT_UNAVAILABLE", message: "Account is unavailable" } });
