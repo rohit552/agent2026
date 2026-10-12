@@ -93,7 +93,7 @@ class _AuthScreenState extends State<AuthScreen> {
           if(_message.isNotEmpty) Container(padding:const EdgeInsets.all(12),decoration:BoxDecoration(color:_messageIsError?const Color(0xFFFFEEEE):const Color(0xFFE7F9EF),borderRadius:BorderRadius.circular(10)),child:Text(_message,style:TextStyle(fontSize:11,height:1.6,color:_messageIsError?const Color(0xFFB42323):const Color(0xFF087847)))),
           if(_message.isNotEmpty) const SizedBox(height:13),
           FilledButton(onPressed:_busy?null:_submit,style:FilledButton.styleFrom(padding:const EdgeInsets.symmetric(vertical:15)),child:_busy?const SizedBox(height:18,width:18,child:CircularProgressIndicator(strokeWidth:2)):Text(_register?'Create account':'Sign in')),
-          TextButton(onPressed:_busy?null:()=>setState(()=>{_register=!_register;_message='';}),child:Text(_register?'Already have an account? Sign in':'New to SkillHeed? Create an account')),
+          TextButton(onPressed:_busy?null:() => setState(() { _register = !_register; _message = ''; }),child:Text(_register?'Already have an account? Sign in':'New to SkillHeed? Create an account')),
           const SizedBox(height:3),
           const Text('Your data is transmitted to the configured SkillHeed API. Do not use production accounts until verification, recovery and privacy workflows are enabled.',textAlign:TextAlign.center,style:TextStyle(fontSize:9,height:1.6,color:Color(0xFF8A96A8))),
         ]))),
