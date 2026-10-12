@@ -184,6 +184,7 @@ model User {
   assignedClassTeachers TeacherClassAssignment[] @relation("TeacherAssignmentCreator")
   createdCourses Course[] @relation("CourseCreator")
   attendanceMarked AttendanceRecord[] @relation("AttendanceMarker")
+  attendanceRecords AttendanceRecord[]
   createdLessons CourseLesson[] @relation("LessonCreator")
   auditEvents  AuditEvent[]  @relation("AuditActor")
 
@@ -216,6 +217,8 @@ model Organization {
   members   OrganizationMember[]
   branches OrganizationBranch[]
   profileRoles RoleAssignment[]
+  academicClasses AcademicClass[]
+  courses Course[]
 }
 
 model OrganizationMember {
@@ -295,6 +298,8 @@ model OrganizationBranch {
   updatedAt      DateTime @updatedAt
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   profileRoles   RoleAssignment[]
+  academicClasses AcademicClass[]
+  courses Course[]
 
   @@unique([organizationId, code])
   @@unique([organizationId, slug])
