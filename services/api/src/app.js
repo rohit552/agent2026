@@ -39,8 +39,8 @@ app.get("/health", async (_req, res) => {
   }
 });
 
-app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1/admin", adminRolesRouter);
+app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1/profiles", profileRouter);
 app.use("/api/v1/me", meProfileRouter);
 
