@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import 'auth_screen.dart';
+import 'assessment_attempt_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, dynamic>> _classes = [];
   List<Map<String, dynamic>> _courses = [];
   List<Map<String, dynamic>> _attendance = [];
+  List<Map<String, dynamic>> _assessments = [];
 
   @override
   void initState() {
@@ -53,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadEducation() async {
     if (_currentUser == null) {
-      if (mounted) setState(() { _classes = []; _courses = []; _attendance = []; _educationError = ''; _educationLoading = false; });
+      if (mounted) setState(() { _classes = []; _courses = []; _attendance = []; _assessments = []; _educationError = ''; _educationLoading = false; });
       return;
     }
     setState(() { _educationLoading = true; _educationError = ''; });
@@ -67,12 +69,46 @@ class _HomeScreenState extends State<HomeScreen> {
             .map((item) => Map<String, dynamic>.from(item as Map)).toList();
         _attendance = (summary['attendance'] as List<dynamic>? ?? <dynamic>[])
             .map((item) => Map<String, dynamic>.from(item as Map)).toList();
+        _assessments = (summary['assessments'] as List<dynamic>? ?? <dynamic>[])
+            .map((item) => Map<String, dynamic>.from(item as Map)).toList();
       });
     } catch (error) {
       if (!mounted) return;
       setState(() => _educationError = error is ApiException ? error.message : 'Could not load your education dashboard.');
     } finally {
       if (mounted) setState(() => _educationLoading = false);
+    }
+  }
+
+  Future<void> _startAssessment(Map<String, dynamic> assessment) async {
+    final assessmentId = assessment['id']?.toString();
+    if (assessmentId == null || assessmentId.isEmpty) return;
+    try {
+      final result = await _auth.startAssessment(assessmentId);
+      if (!mounted) return;
+      final data = Map<String, dynamic>.from(result);
+      final returnedAttempt = await Navigator.of(context).push<Map<String, dynamic>>(
+        MaterialPageRoute(builder: (_) => AssessmentAttemptScreen(
+          auth: _auth,
+          assessment: Map<String, dynamic>.from(data['assessment'] as Map),
+          attempt: Map<String, dynamic>.from(data['attempt'] as Map),
+          initialAnswers: Map<String, dynamic>.from(data['answers'] as Map? ?? const {}),
+        )),
+      );
+      if (!mounted) return;
+      if (returnedAttempt != null) {
+        await _loadEducation();
+        final message = returnedAttempt['status'] == 'GRADED'
+            ? 'Assessment complete. Your score is available.'
+            : 'Assessment submitted. Written responses may need teacher review.';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      } else {
+        await _loadEducation();
+      }
+    } catch (error) {
+      if (!mounted) return;
+      final message = error is ApiException ? error.message : 'Could not start the assessment.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -192,7 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
               await _auth.logout();
               if (!mounted || !sheetContext.mounted) return;
               Navigator.of(sheetContext).pop();
-              setState(() { _currentUser = null; _classes = []; _courses = []; _attendance = []; _educationError = ''; });
+              setState(() { _currentUser = null; _classes = []; _courses = []; _attendance = []; _assessments = []; _educationError = ''; });
             },
             icon: const Icon(Icons.logout),
             label: const Text('Sign out'),
@@ -358,6 +394,30 @@ class _HomeScreenState extends State<HomeScreen> {
                       title: Text(course['title']?.toString() ?? 'Course', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
                       subtitle: Text('${course['_count'] is Map ? course['_count']['lessons'] ?? 0 : 0} lessons · ${course['status'] ?? 'PUBLISHED'}', style: const TextStyle(fontSize: 9, color: Color(0xFF71829C))),
                       trailing: const Icon(Icons.chevron_right_rounded),
+                    ),
+                  )),
+                ],
+                if (_assessments.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text('Assessments & quizzes', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF243652))),
+                  const SizedBox(height: 7),
+                  ..._assessments.take(10).map((assessment) => Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    elevation: 0,
+                    color: const Color(0xFFF8FAFF),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      child: Row(children: [
+                        Container(width: 36, height: 36, alignment: Alignment.center, decoration: BoxDecoration(color: const Color(0xFFEAF3FF), borderRadius: BorderRadius.circular(11)), child: const Icon(Icons.quiz_outlined, color: Color(0xFF1769FF), size: 19)),
+                        const SizedBox(width: 10),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(assessment['title']?.toString() ?? 'Assessment', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 4),
+                          Text('${assessment['_count'] is Map ? assessment['_count']['questions'] ?? 0 : 0} questions · ${assessment['timeLimitSeconds'] == null ? 'No time limit' : '${((assessment['timeLimitSeconds'] as num).toInt()/60).ceil()} min'} · Up to ${assessment['maxAttempts'] ?? 1} attempts', style: const TextStyle(fontSize: 9, color: Color(0xFF71829C))),
+                        ])),
+                        const SizedBox(width: 8),
+                        FilledButton.tonal(onPressed: _educationLoading ? null : () => _startAssessment(assessment), child: const Text('Start', style: TextStyle(fontSize: 10))),
+                      ]),
                     ),
                   )),
                 ],
