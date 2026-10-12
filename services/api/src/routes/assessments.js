@@ -524,10 +524,17 @@ assessmentRouter.post("/attempts/:attemptId/submit", async (req, res, next) => {
 
     const updatedAttempt = await prisma.$transaction(async tx => {
       for (const result of scoreUpdates) {
+        const answerData = {
+          isCorrect: result.isCorrect,
+          pointsAwarded: result.pointsAwarded,
+          manuallyGraded: result.manuallyGraded,
+          answeredAt: now,
+          ...(result.answer !== null ? { answer: result.answer } : {})
+        };
         await tx.assessmentAnswer.upsert({
           where: { attemptId_questionId: { attemptId: attempt.id, questionId: result.questionId } },
-          update: { isCorrect: result.isCorrect, pointsAwarded: result.pointsAwarded, manuallyGraded: result.manuallyGraded, answeredAt: now },
-          create: { attemptId: attempt.id, questionId: result.questionId, answer: result.answer, isCorrect: result.isCorrect, pointsAwarded: result.pointsAwarded, manuallyGraded: result.manuallyGraded, answeredAt: now }
+          update: answerData,
+          create: { attemptId: attempt.id, questionId: result.questionId, ...answerData }
         });
       }
       const savedAttempt = await tx.assessmentAttempt.update({
