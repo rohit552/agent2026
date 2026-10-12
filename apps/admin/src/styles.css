@@ -60,3 +60,70 @@ td select{border:1px solid #dce5f2;border-radius:8px;padding:8px 7px;background:
 .primary-action:disabled{opacity:.55;cursor:wait}
 .role-dialog .error{background:#fff1f1;border:1px solid #ffd7d7;border-radius:9px;padding:10px;margin:0}
 @media(max-width:680px){.role-dialog{padding:24px 16px}.role-dialog h2{font-size:21px}.assignment-item{align-items:flex-start;flex-direction:column}.assignment-actions{justify-content:flex-start}.user-actions{align-items:flex-start;flex-direction:column}}
+
+/* Education core workspace */
+.education-panel{padding-bottom:20px}
+.education-intro{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:15px 20px;background:#f8faff;border-bottom:1px solid var(--line);font-size:10px;color:#7b899e}
+.education-intro strong{color:#30445f}
+.edu-create-class{padding:20px;border-bottom:1px solid var(--line);display:grid;gap:15px}
+.edu-create-class h3,.education-workspace h3,.education-workspace h4,.course-create-form h4,.attendance-form h4{font:800 13px "Plus Jakarta Sans",sans-serif;color:#243652;margin:0}
+.edu-form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.edu-form-grid label,.edu-split-forms label,.attendance-form label,.course-create-form label,.lesson-workspace form label{display:grid;gap:7px;font-size:10px;font-weight:750;color:#4b5c75}
+.edu-form-grid input,.edu-form-grid select,.edu-split-forms select,.edu-split-fields input,.edu-split-fields select,.course-create-form input,.course-create-form textarea,.lesson-workspace form input,.lesson-workspace form textarea,.lesson-workspace form select{width:100%;min-width:0;padding:10px 11px;border:1px solid #dfe7f2;border-radius:9px;background:#fff;color:#253651;font:500 10px Inter,system-ui,sans-serif;outline:none}
+.edu-form-grid input:focus,.edu-form-grid select:focus,.edu-split-forms select:focus,.edu-split-fields input:focus,.edu-split-fields select:focus,.course-create-form input:focus,.course-create-form textarea:focus,.lesson-workspace form input:focus,.lesson-workspace form textarea:focus{border-color:#80b2ff;box-shadow:0 0 0 3px #1769ff12}
+.education-panel .primary-action{justify-self:start}
+.education-error{margin:15px 20px 0;padding:11px 13px;border-radius:9px;background:#fff1f1;color:#af2828;border:1px solid #f7d6d6;font-size:10px;line-height:1.6}
+.education-layout{display:grid;grid-template-columns:minmax(245px,.78fr) minmax(0,1.45fr);gap:18px;padding:20px}
+.education-list,.education-workspace{min-width:0}
+.subpanel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}
+.subpanel-head h3,.subpanel-head h4{font:800 13px "Plus Jakarta Sans",sans-serif;color:#243652;margin:0}
+.subpanel-head p{font-size:10px;color:#8894a7;margin:5px 0 0}
+.subpanel-head>span{font-size:9px;color:#8390a4}
+.class-item{width:100%;display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;background:#fff;padding:12px;text-align:left;margin-bottom:8px;cursor:pointer;color:inherit}
+.class-item:hover,.class-item.selected{background:#f3f7ff;border-color:#a9cbff}
+.class-symbol{flex:0 0 34px;height:34px;display:grid;place-items:center;border-radius:10px;background:#eaf3ff;color:#1769ff;font-size:16px}
+.class-copy{display:grid;gap:5px;min-width:0;flex:1}
+.class-copy strong{font-size:11px;color:#293d59;overflow-wrap:anywhere}
+.class-copy small{font-size:9px;line-height:1.5;color:#8794a8;overflow-wrap:anywhere}
+.class-open{font-size:19px;color:#8c9ab0}
+.workspace-empty{min-height:250px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:25px;border:1px dashed #d8e2f1;border-radius:16px;background:#fafcff}
+.workspace-empty>span{width:44px;height:44px;display:grid;place-items:center;border-radius:14px;background:#eaf3ff;color:#1769ff;font-size:24px}
+.workspace-empty h3{margin:14px 0 8px}
+.workspace-empty p{max-width:320px;font-size:10px;line-height:1.8;color:#8491a4}
+.education-workspace>.subpanel-head{align-items:flex-start}
+.edu-mini-stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:15px}
+.edu-mini-stats span{border:1px solid var(--line);border-radius:9px;padding:9px 10px;font-size:9px;color:#718098}
+.edu-mini-stats b{font-size:13px;color:#1769ff;margin-right:4px}
+.edu-split-forms{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.edu-split-forms form,.attendance-form,.course-create-form,.lesson-workspace form{display:grid;gap:11px;border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
+.edu-split-forms .secondary,.attendance-form .secondary,.lesson-workspace form .secondary{justify-self:start}
+.class-roster,.class-courses,.lesson-workspace{margin-top:17px;border:1px solid var(--line);border-radius:13px;padding:14px;min-width:0}
+.roster-items{display:grid;gap:0}
+.roster-items>div{display:flex;align-items:center;gap:9px;padding:10px 0;border-top:1px solid #edf1f7}
+.avatar-mini{flex:0 0 30px;width:30px;height:30px;border-radius:10px;display:grid;place-items:center;background:#e8f1ff;color:#1769ff;font-weight:800;font-size:11px}
+.roster-items>div>span:nth-child(2){display:grid;gap:4px;min-width:0;flex:1}
+.roster-items strong{font-size:10px;color:#324761}
+.roster-items small{font-size:9px;color:#8793a6;overflow-wrap:anywhere}
+.roster-items .status-tag{margin-left:auto}
+.attendance-form{margin-top:14px}
+.edu-split-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.attendance-form>p{font-size:9px;line-height:1.7;color:#8390a4;margin:0}
+.course-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid #edf1f7}
+.course-item>div:first-child{display:grid;gap:5px;min-width:0}
+.course-item strong{font-size:10px;color:#30445f;overflow-wrap:anywhere}
+.course-item small{font-size:9px;color:#8693a7}
+.course-actions{display:flex;align-items:center;gap:7px}
+.course-actions select{max-width:120px;min-width:80px;padding:7px;border:1px solid #dce5f2;border-radius:7px;background:#fff;font-size:9px}
+.course-create-form{margin-top:13px;background:#fafcff}
+.course-create-form textarea,.lesson-workspace form textarea{resize:vertical}
+.lesson-workspace{background:#fafcff}
+.lesson-workspace .subpanel-head{align-items:center}
+.lesson-item{border-top:1px solid #e8edf5;padding:12px 0}
+.lesson-item strong{font-size:10px;color:#2d415e}
+.lesson-item small{display:block;font-size:9px;color:#8a97aa;margin-top:4px}
+.lesson-item p{white-space:pre-wrap;font-size:10px;line-height:1.7;color:#697991;margin:7px 0 0;overflow-wrap:anywhere}
+.lesson-workspace form{margin-top:12px;background:#fff}
+.lesson-workspace .check-row{display:flex;align-items:center;gap:8px}
+.lesson-workspace .check-row input{width:15px;height:15px;accent-color:#1769ff}
+@media(max-width:1100px){.edu-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.education-layout{grid-template-columns:minmax(0,1fr)}.education-list{max-height:380px;overflow:auto}}
+@media(max-width:680px){.edu-form-grid{grid-template-columns:1fr}.education-layout{padding:14px;gap:17px}.edu-split-forms{grid-template-columns:1fr}.edu-split-fields{grid-template-columns:1fr}.course-item{align-items:flex-start;flex-direction:column}.course-actions{width:100%;justify-content:space-between}.course-actions select{max-width:150px}.education-intro{gap:7px}.education-intro span{display:none}}
