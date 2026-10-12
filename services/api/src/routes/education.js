@@ -386,7 +386,17 @@ educationRouter.get("/me/attendance", async (req, res, next) => {
       where: { studentId: req.auth.userId },
       orderBy: [{ date: "desc" }, { classId: "asc" }],
       take: 500,
-      include: { academicClass: { select: { id: true, name: true, code: true, academicYear: true, organization: { select: { id: true, name: true } } } }
+      include: {
+        academicClass: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            academicYear: true,
+            organization: { select: { id: true, name: true } }
+          }
+        }
+      }
     });
     return res.json({ data: { records } });
   } catch (error) { return next(error); }
