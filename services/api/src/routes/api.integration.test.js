@@ -131,7 +131,9 @@ test("registration, activation, session revocation and lead workflow", {
     body: JSON.stringify({ profileType: "SCHOOL_TEACHER", scopeType: "ORGANIZATION", organizationId })
   });
   assert.equal(teacherRole.status, 201);
-  assert.equal((await teacherRole.json()).data.assignment.accessRole, "TEACHER");
+  const teacherRoleData = await teacherRole.json();
+  assert.equal(teacherRoleData.data.assignment.accessRole, "TEACHER");
+  const teacherAssignmentId = teacherRoleData.data.assignment.id;
 
   const userRoles = await fetch(`${base}/api/v1/me/profile-roles`, {
     headers: { Authorization: `Bearer ${session.accessToken}` }
@@ -140,7 +142,7 @@ test("registration, activation, session revocation and lead workflow", {
   assert.equal((await userRoles.json()).data.assignments.length, 2);
 
   const selectedProfile = await fetch(`${base}/api/v1/me/profile-roles`, {
-    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": (await teacherRole.clone().json()).data.assignment.id }
+    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": teacherAssignmentId }
   });
   assert.equal(selectedProfile.status, 200);
   assert.equal((await selectedProfile.json()).data.activeRole, "TEACHER");
