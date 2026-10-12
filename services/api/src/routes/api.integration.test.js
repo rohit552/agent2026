@@ -23,19 +23,28 @@ test("registration, activation, session revocation and lead workflow", {
   let leadId;
   let organizationId;
   let otherOrganizationId;
+  let teacherId;
+  let academicClassId;
+  let courseId;
+  let lessonId;
+  let branchId;
   const territoryCodes = [];
 
   t.after(async () => {
     try {
       const auditWhere = [];
       if (adminId) auditWhere.push({ actorId: adminId });
-      if (leadId) auditWhere.push({ entityId: leadId });
+      if (userId) auditWhere.push({ actorId: userId });
+      if (teacherId) auditWhere.push({ actorId: teacherId });
+      for (const entityId of [leadId, academicClassId, courseId, lessonId]) if (entityId) auditWhere.push({ entityId });
       if (auditWhere.length) await prisma.auditEvent.deleteMany({ where: { OR: auditWhere } });
       if (leadId) await prisma.lead.deleteMany({ where: { id: leadId } });
       if (territoryCodes.length) await prisma.territory.deleteMany({ where: { code: { in: territoryCodes } } });
+      // Delete organizations first so cascading education records are removed before their creator accounts.
+      if (organizationId || otherOrganizationId) await prisma.organization.deleteMany({ where: { id: { in: [organizationId, otherOrganizationId].filter(Boolean) } } });
+      if (teacherId) await prisma.user.deleteMany({ where: { id: teacherId } });
       if (adminId) await prisma.user.deleteMany({ where: { id: adminId } });
       if (userId) await prisma.user.deleteMany({ where: { id: userId } });
-      if (organizationId || otherOrganizationId) await prisma.organization.deleteMany({ where: { id: { in: [organizationId, otherOrganizationId].filter(Boolean) } } });
     } finally {
       await new Promise(resolve => server.close(resolve));
       await prisma.$disconnect();
@@ -166,6 +175,7 @@ test("registration, activation, session revocation and lead workflow", {
     body: JSON.stringify({ name: "CI North Branch", code: `N-${suffix.slice(0,8)}`, slug: `north-${suffix.slice(0,8)}` })
   });
   assert.equal(branchResponse.status, 201);
+  branchId = (await branchResponse.clone().json()).data.branch.id;
 
   const scopedBranches = await fetch(`${base}/api/v1/admin/organizations/${organizationId}/branches`, {
     headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": teacherAssignmentId }
@@ -241,6 +251,127 @@ test("registration, activation, session revocation and lead workflow", {
     headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": districtAssignmentId }
   });
   assert.equal(withinScopeTerritory.status, 200);
+
+
+  // Education core: school-scoped classes, teacher assignments, enrolment, attendance and published lessons.
+  const teacherEmail = `teacher-${suffix}@example.test`;
+  const teacher = await prisma.user.create({
+    data: { fullName: "Integration Teacher", email: teacherEmail, passwordHash: await bcrypt.hash("Teacher-strong-password-123", 12), role: "TEACHER", status: "ACTIVE", profile: { create: { displayName: "Integration Teacher" } } },
+    select: { id: true }
+  });
+  teacherId = teacher.id;
+
+  const teacherProfileResponse = await fetch(`${base}/api/v1/admin/users/${teacherId}/profile-roles`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ profileType: "SCHOOL_TEACHER", scopeType: "ORGANIZATION", organizationId })
+  });
+  assert.equal(teacherProfileResponse.status, 201);
+  const teacherProfileId = (await teacherProfileResponse.json()).data.assignment.id;
+  const teacherLoginResponse = await fetch(`${base}/api/v1/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: teacherEmail, password: "Teacher-strong-password-123" }) });
+  assert.equal(teacherLoginResponse.status, 200);
+  const teacherToken = (await teacherLoginResponse.json()).data.accessToken;
+
+  const classResponse = await fetch(`${base}/api/v1/education/classes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ organizationId, branchId, name: "Class 8 A", code: `CLS-${suffix.slice(0,8)}`, gradeLevel: "8", section: "A", academicYear: "2026-27" })
+  });
+  assert.equal(classResponse.status, 201);
+  const academicClass = (await classResponse.json()).data.class;
+  academicClassId = academicClass.id;
+
+  const studentCannotCreateClasses = await fetch(`${base}/api/v1/education/classes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId },
+    body: JSON.stringify({ organizationId, name: "Unauthorized class", code: `BAD-${suffix.slice(0,8)}`, academicYear: "2026-27" })
+  });
+  assert.equal(studentCannotCreateClasses.status, 403);
+
+  const assignedTeacher = await fetch(`${base}/api/v1/education/classes/${academicClassId}/teachers`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ teacherId })
+  });
+  assert.equal(assignedTeacher.status, 201);
+
+  const enrollmentResponse = await fetch(`${base}/api/v1/education/classes/${academicClassId}/enrollments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ studentId: userId })
+  });
+  assert.equal(enrollmentResponse.status, 201);
+
+  const studentClasses = await fetch(`${base}/api/v1/education/classes`, {
+    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId }
+  });
+  assert.equal(studentClasses.status, 200);
+  assert.ok((await studentClasses.json()).data.classes.some(item => item.id === academicClassId));
+
+  const studentRosterDenied = await fetch(`${base}/api/v1/education/classes/${academicClassId}/roster`, {
+    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId }
+  });
+  assert.equal(studentRosterDenied.status, 403);
+
+  const teacherRoster = await fetch(`${base}/api/v1/education/classes/${academicClassId}/roster`, {
+    headers: { Authorization: `Bearer ${teacherToken}`, "X-SkillHeed-Profile-Id": teacherProfileId }
+  });
+  assert.equal(teacherRoster.status, 200);
+  assert.equal((await teacherRoster.json()).data.students.length, 1);
+
+  const attendanceDate = new Date().toISOString().slice(0, 10);
+  const markAttendance = await fetch(`${base}/api/v1/education/classes/${academicClassId}/attendance`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${teacherToken}`, "X-SkillHeed-Profile-Id": teacherProfileId },
+    body: JSON.stringify({ date: attendanceDate, entries: [{ studentId: userId, status: "PRESENT", note: "Integration test" }] })
+  });
+  assert.equal(markAttendance.status, 201);
+
+  const invalidAttendanceDate = await fetch(`${base}/api/v1/education/classes/${academicClassId}/attendance?date=2026-13-42`, {
+    headers: { Authorization: `Bearer ${adminToken}` }
+  });
+  assert.equal(invalidAttendanceDate.status, 400);
+
+  const ownAttendance = await fetch(`${base}/api/v1/education/me/attendance`, {
+    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId }
+  });
+  assert.equal(ownAttendance.status, 200);
+  assert.equal((await ownAttendance.json()).data.records.length, 1);
+
+  const courseResponse = await fetch(`${base}/api/v1/education/courses`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ organizationId, branchId, classId: academicClassId, title: "Science Basics", description: "Starter course content" })
+  });
+  assert.equal(courseResponse.status, 201);
+  courseId = (await courseResponse.json()).data.course.id;
+
+  const lessonResponse = await fetch(`${base}/api/v1/education/courses/${courseId}/lessons`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ title: "Introduction", contentType: "TEXT", contentText: "Welcome to the course", sortOrder: 1, published: true })
+  });
+  assert.equal(lessonResponse.status, 201);
+  lessonId = (await lessonResponse.json()).data.lesson.id;
+
+  const publishCourse = await fetch(`${base}/api/v1/education/courses/${courseId}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ status: "PUBLISHED" })
+  });
+  assert.equal(publishCourse.status, 200);
+
+  const studentCourses = await fetch(`${base}/api/v1/education/courses?organizationId=${organizationId}`, {
+    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId }
+  });
+  assert.equal(studentCourses.status, 200);
+  assert.ok((await studentCourses.json()).data.courses.some(item => item.id === courseId));
+
+  const studentLessons = await fetch(`${base}/api/v1/education/courses/${courseId}/lessons`, {
+    headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": studentRoleAssignmentId }
+  });
+  assert.equal(studentLessons.status, 200);
+  assert.equal((await studentLessons.json()).data.lessons.length, 1);
 
   await prisma.user.update({ where: { id: userId }, data: { status: "SUSPENDED" } });
   const revoked = await fetch(`${base}/api/v1/auth/me`, { headers: { Authorization: `Bearer ${session.accessToken}` } });
