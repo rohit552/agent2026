@@ -459,7 +459,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           Text('Attempt ${attempt['attemptNumber'] ?? 1} · ${status.replaceAll('_',' ')} · ${DateTime.tryParse(attempt['startedAt']?.toString() ?? '')?.toLocal().toString().split(' ').first ?? '—'}', style: const TextStyle(fontSize: 9, color: Color(0xFF71829C))),
                         ])),
                         const SizedBox(width: 8),
-                        Text(scorePercent == null ? (status == 'SUBMITTED' ? 'Pending grade' : '—') : '${scorePercent}%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: statusColor)),
+                        Text(scorePercent == null ? (status == 'SUBMITTED' ? 'Pending grade' : '—') : '$scorePercent%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: statusColor)),
                       ]),
                     );
                   }),
