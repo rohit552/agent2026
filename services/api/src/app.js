@@ -6,6 +6,7 @@ import pinoHttp from "pino-http";
 import { config } from "./config.js";
 import { prisma } from "./db.js";
 import { authRouter } from "./routes/auth.js";
+import { leadsRouter } from "./routes/leads.js";
 
 export const app = express();
 
@@ -34,6 +35,8 @@ app.get("/health", async (_req, res) => {
     res.status(503).json({ status: "degraded", database: "unavailable", service: "skillheed-api" });
   }
 });
+
+app.use("/api/v1/leads", rateLimit({ windowMs: 60 * 60 * 1000, limit: process.env.NODE_ENV === "test" ? 1000 : 10, standardHeaders: "draft-7", legacyHeaders: false, message: { error: { code: "RATE_LIMITED", message: "Too many enquiries; please try again later" } } }), leadsRouter);
 
 app.use("/api/v1/auth", rateLimit({
   windowMs: 15 * 60 * 1000,
