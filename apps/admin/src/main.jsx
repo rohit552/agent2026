@@ -26,6 +26,7 @@ function App() {
   const [overview, setOverview] = useState(null);
   const [users, setUsers] = useState([]);
   const [leads, setLeads] = useState([]);
+  const [guardianLinks, setGuardianLinks] = useState([]);
   const [organizations, setOrganizations] = useState([]);
   const [profileCatalog, setProfileCatalog] = useState([]);
   const [territories, setTerritories] = useState([]);
@@ -38,17 +39,19 @@ function App() {
   const [busyId, setBusyId] = useState("");
 
   async function loadDashboard(accessToken) {
-    const [overviewRes, usersRes, leadsRes, orgsRes, catalogRes, territoriesRes] = await Promise.all([
+    const [overviewRes, usersRes, leadsRes, orgsRes, catalogRes, territoriesRes, guardianRes] = await Promise.all([
       apiRequest("/api/v1/admin/overview", { token: accessToken }),
       apiRequest("/api/v1/admin/users?page=1&pageSize=50", { token: accessToken }),
       apiRequest("/api/v1/leads?page=1&pageSize=50", { token: accessToken }),
       apiRequest("/api/v1/admin/organizations?page=1&pageSize=50", { token: accessToken }),
       apiRequest("/api/v1/admin/profile-catalog", { token: accessToken }),
-      apiRequest("/api/v1/admin/territories?page=1&pageSize=100", { token: accessToken })
+      apiRequest("/api/v1/admin/territories?page=1&pageSize=100", { token: accessToken }),
+      apiRequest("/api/v1/admin/guardian-links?page=1&pageSize=50", { token: accessToken })
     ]);
     setOverview(overviewRes.data);
     setUsers(usersRes.data.users);
     setLeads(leadsRes.data.leads);
+    setGuardianLinks(guardianRes.data.links);
     setOrganizations(orgsRes.data.organizations);
     setProfileCatalog(catalogRes.data.profiles);
     setTerritories(territoriesRes.data.territories);
@@ -177,9 +180,19 @@ function App() {
     finally { setBusyId(""); }
   }
 
+  async function updateGuardianLinkStatus(target, status) {
+    setBusyId(target.id); setActionMessage(""); setError("");
+    try {
+      await apiRequest(`/api/v1/admin/guardian-links/${target.id}/status`, { token, method: "PATCH", body: JSON.stringify({ status }) });
+      await loadDashboard(token);
+      setActionMessage(`Guardian link marked as ${status.toLowerCase()}.`);
+    } catch (err) { setActionMessage(err.message); }
+    finally { setBusyId(""); }
+  }
+
   function signOut() {
     setToken(""); setUser(null); setPassword(""); setOverview(null);
-    setUsers([]); setLeads([]); setOrganizations([]); setProfileCatalog([]); setTerritories([]); setBranches([]); setSelectedRoleUser(null); setRoleAssignments([]); setView("overview"); setError(""); setActionMessage("");
+    setUsers([]); setLeads([]); setGuardianLinks([]); setOrganizations([]); setProfileCatalog([]); setTerritories([]); setBranches([]); setSelectedRoleUser(null); setRoleAssignments([]); setView("overview"); setError(""); setActionMessage("");
   }
 
   const selectedProfile = profileCatalog.find(profile => profile.key === roleForm.profileType);
@@ -193,7 +206,7 @@ function App() {
       <header className="page-head"><div><span className="kicker">SKILLHEED OPERATIONS</span><h1>{view === "overview" ? `Good to see you, ${user.fullName?.split(" ")[0]}.` : modules.find(m => m[2] === view)?.[1] || "Workspace"}</h1><p>Secure operations workspace for SkillHeed platform administrators.</p></div><div className="header-actions"><span className="signed">● API session active</span><button className="secondary" onClick={() => loadDashboard(token).catch(e => setActionMessage(e.message))}>Refresh data</button><button className="secondary" onClick={signOut}>Sign out</button></div></header>
       <section className="notice"><b>Administrator access</b><span>Changes are checked by the API and important account/enquiry status changes are written to the audit log.</span></section>
       {actionMessage && <p className="action-message" role="status">{actionMessage}</p>}
-      {view === "overview" && <><section className="stat-grid"><article><span>Total users</span><strong>{overview?.users ?? "—"}</strong><small>Registered platform accounts</small></article><article><span>Active accounts</span><strong>{overview?.activeUsers ?? "—"}</strong><small>Accounts currently active</small></article><article><span>Pending verification</span><strong>{overview?.pendingUsers ?? "—"}</strong><small>Awaiting review or verification</small></article><article><span>Open enquiries</span><strong>{overview?.openLeads ?? "—"}</strong><small>{overview?.leads ?? "—"} total · {overview?.institutions ?? "—"} institutions</small></article></section><section className="modules"><div className="module-head"><div><h2>Management workspaces</h2><p>Use a workspace to review live records from the API.</p></div><span className="pill">Connected</span></div><div className="module-grid">{modules.map(([icon,name,key])=><button className="module-card" onClick={() => setView(key)} key={key}><div className="module-icon">{icon}</div><h3>{name}</h3><p>{({users:"Account records and activation workflow",institutions:"Registered organizations and branches",leads:"Website leads and follow-up status",learning:"Courses and assessments — upcoming integration",hire:"Jobs and employers — upcoming integration",partners:"Partners and territory workflows — upcoming integration",operations:"Support, audit and platform reliability — upcoming integration"})[key]}</p><span className={["users","institutions","leads"].includes(key)?"available":"planned"}>{["users","institutions","leads"].includes(key)?"API connected":"Integration planned"}</span></button>)}</div></section></>}
+      {view === "overview" && <><section className="stat-grid"><article><span>Total users</span><strong>{overview?.users ?? "—"}</strong><small>Registered platform accounts</small></article><article><span>Active accounts</span><strong>{overview?.activeUsers ?? "—"}</strong><small>Accounts currently active</small></article><article><span>Pending verification</span><strong>{overview?.pendingUsers ?? "—"}</strong><small>Awaiting review or verification</small></article><article><span>Open enquiries</span><strong>{overview?.openLeads ?? "—"}</strong><small>{overview?.leads ?? "—"} total · {overview?.institutions ?? "—"} institutions</small></article></section><section className="modules"><div className="module-head"><div><h2>Management workspaces</h2><p>Use a workspace to review live records from the API.</p></div><span className="pill">Connected</span></div><div className="module-grid">{modules.map(([icon,name,key])=><button className="module-card" onClick={() => setView(key)} key={key}><div className="module-icon">{icon}</div><h3>{name}</h3><p>{({users:"Account records and activation workflow",institutions:"Registered organizations and branches",leads:"Website leads and follow-up status",learning:"Courses and assessments — upcoming integration",hire:"Jobs and employers — upcoming integration",partners:"Partners and territory workflows — upcoming integration",operations:"Guardian/student link verification and operations workflows"})[key]}</p><span className={["users","institutions","leads","operations"].includes(key)?"available":"planned"}>{["users","institutions","leads","operations"].includes(key)?"API connected":"Integration planned"}</span></button>)}</div></section></>}
 
       {view === "users" && <section className="data-panel"><div className="panel-head"><div><h2>Users & profiles</h2><p>{users.length} records loaded · passwords are never returned by the API.</p></div><button className="secondary" onClick={() => loadDashboard(token).catch(e => setActionMessage(e.message))}>Reload</button></div><div className="table-wrap"><table><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Joined</th><th>Action</th></tr></thead><tbody>{users.map(u=><tr key={u.id}><td><strong>{u.fullName}</strong><small>{u.email}</small></td><td>{u.role}</td><td><span className={"status-tag " + u.status.toLowerCase()}>{u.status}</span></td><td>{fmtDate(u.createdAt)}</td><td className="user-actions"><button className="row-action" onClick={() => openProfileManager(u)}>Profiles</button>{u.status === "DELETED" ? "—" : <button className="row-action" disabled={busyId===u.id || (u.id===user.id && u.status==="ACTIVE")} onClick={() => updateUserStatus(u,u.status==="ACTIVE"?"SUSPENDED":"ACTIVE")}>{busyId===u.id?"Saving…":u.status==="ACTIVE"?"Suspend":"Activate"}</button>}</td></tr>)}</tbody></table>{users.length===0&&<p className="empty">No users found.</p>}</div></section>}
 
@@ -201,7 +214,10 @@ function App() {
 
       {view === "institutions" && <section className="data-panel"><div className="panel-head"><div><h2>Institutions</h2><p>{organizations.length} organization records loaded from PostgreSQL.</p></div><button className="secondary" onClick={() => loadDashboard(token).catch(e => setActionMessage(e.message))}>Reload</button></div><div className="table-wrap"><table><thead><tr><th>Institution</th><th>Type</th><th>Status</th><th>Members</th><th>Created</th></tr></thead><tbody>{organizations.map(org=><tr key={org.id}><td><strong>{org.name}</strong><small>{org.slug}</small></td><td>{org.type}</td><td><span className={"status-tag "+org.status.toLowerCase()}>{org.status}</span></td><td>{org._count?.members ?? 0}</td><td>{fmtDate(org.createdAt)}</td></tr>)}</tbody></table>{organizations.length===0&&<p className="empty">No institutions are registered yet.</p>}</div></section>}
 
-      {!["overview","users","leads","institutions"].includes(view) && <section className="data-panel placeholder"><div className="module-icon">◈</div><h2>{modules.find(m=>m[2]===view)?.[1] || "Workspace"}</h2><p>This workspace is planned. Add its data model, authorization policies, CRUD API, tests and operational workflows before using it with live records.</p><button className="secondary" onClick={()=>setView("overview")}>Back to overview</button></section>}
+
+      {view === "operations" && <section className="data-panel"><div className="panel-head"><div><h2>Guardian / student link review</h2><p>Requests remain pending until an authorized review is completed. Approval and revocation are audited.</p></div><button className="secondary" onClick={() => loadDashboard(token).catch(e => setActionMessage(e.message))}>Reload</button></div><div className="table-wrap"><table><thead><tr><th>Parent / guardian</th><th>Student</th><th>Requested</th><th>Consent / status</th></tr></thead><tbody>{guardianLinks.map(link=><tr key={link.id}><td><strong>{link.guardian?.fullName || "Unknown guardian"}</strong><small>{link.guardian?.email || "—"}</small></td><td><strong>{link.student?.fullName || "Unknown student"}</strong><small>{link.student?.email || "—"}</small></td><td>{fmtDate(link.createdAt)}</td><td><select aria-label={"Guardian link status for "+(link.guardian?.fullName || "guardian")} value={link.status} disabled={busyId===link.id} onChange={event=>updateGuardianLinkStatus(link,event.target.value)}>{["PENDING","APPROVED","REVOKED"].map(status=><option key={status} value={status}>{status}</option>)}</select>{link.consentAt && <small className="consent-date">Approved {fmtDate(link.consentAt)}</small>}</td></tr>)}</tbody></table>{guardianLinks.length===0&&<p className="empty">There are no guardian/student link requests.</p>}</div></section>}
+
+      {!["overview","users","leads","institutions","operations"].includes(view) && <section className="data-panel placeholder"><div className="module-icon">◈</div><h2>{modules.find(m=>m[2]===view)?.[1] || "Workspace"}</h2><p>This workspace is planned. Add its data model, authorization policies, CRUD API, tests and operational workflows before using it with live records.</p><button className="secondary" onClick={()=>setView("overview")}>Back to overview</button></section>}
       <section className="security"><div><h3>Security and access</h3><p>The API validates the active account and role on each request. Keep secrets off the frontend, limit access to this admin hostname, and enable MFA before production launch.</p></div><span>RBAC</span></section>
     </main>
 
