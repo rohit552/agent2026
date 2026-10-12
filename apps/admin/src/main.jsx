@@ -627,6 +627,7 @@ function App() {
         {analyticsError && <p className="education-error" role="alert">{analyticsError}</p>}
         {!analyticsOverview && <div className="analytics-empty"><span>◷</span><h3>Load assessment reports</h3><p>Choose an institution, class, or date range and load reports to see assessment outcomes within your server-authorized scope.</p><button className="primary-action" disabled={analyticsLoading} onClick={()=>loadAssessmentAnalytics()}>{analyticsLoading?"Loading…":"Load reports"}</button></div>}
         {analyticsOverview && <>
+          {analyticsOverview.metrics.attemptSampleLimitReached && <p className="analytics-sample-note">The attempt totals use the latest 10,000 attempts; narrower filters or exports can be added for larger reporting windows.</p>}
           <div className="analytics-kpis">
             <article><span>Assessments</span><strong>{analyticsOverview.metrics.totalAssessments}</strong><small>{analyticsOverview.metrics.publishedAssessments} published · {analyticsOverview.metrics.draftAssessments} draft</small></article>
             <article><span>Attempts</span><strong>{analyticsOverview.metrics.totalAttempts}</strong><small>{analyticsOverview.metrics.gradedAttempts} graded · {analyticsOverview.metrics.inProgressAttempts} in progress</small></article>
@@ -645,7 +646,7 @@ function App() {
               {!analyticsDetail ? <div className="workspace-empty"><span>▤</span><h3>Select an assessment</h3><p>Question-level performance and attempt outcomes will appear here.</p></div> : <>
                 <div className="subpanel-head"><div><span className="kicker">QUESTION ANALYSIS</span><h3>{analyticsDetail.assessment.title}</h3><p>{analyticsDetail.assessment.academicClass?.name || analyticsDetail.assessment.organization?.name} · {analyticsDetail.metrics.questionCount} questions</p></div><span className={"status-tag "+analyticsDetail.assessment.status.toLowerCase()}>{analyticsDetail.assessment.status}</span></div>
                 <div className="analytics-detail-kpis"><span><b>{analyticsDetail.metrics.totalAttempts}</b> attempts</span><span><b>{analyticsDetail.metrics.gradedAttempts}</b> graded</span><span><b>{analyticsDetail.metrics.averageScorePercent==null?"—":analyticsDetail.metrics.averageScorePercent+"%"}</b> average</span></div>
-                <div className="score-band-panel"><div className="subpanel-head"><h4>Score distribution</h4><span>Graded attempts</span></div>
+                <div className="score-band-panel"><div className="subpanel-head"><h4>Score distribution</h4><span>Graded attempts</span></div>{analyticsDetail.metrics.attemptSampleLimitReached && <p className="analytics-sample-note">Showing the most recent 500 attempts; older attempts are not included in this question report.</p>}
                   <div className="score-bands">{analyticsDetail.metrics.scoreBands.map(band=><div key={band.label}><span>{band.label}</span><strong>{band.count}</strong><div className="score-band-track"><i style={{width:(analyticsDetail.metrics.gradedAttempts ? (band.count/analyticsDetail.metrics.gradedAttempts)*100 : 0)+"%"}}/></div></div>)}</div>
                 </div>
                 <div className="question-metrics-panel"><div className="subpanel-head"><h4>Question outcomes</h4><span>Manager view</span></div>
