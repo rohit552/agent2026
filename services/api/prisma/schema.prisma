@@ -124,6 +124,40 @@ enum GuardianLinkStatus {
   REVOKED
 }
 
+
+enum AcademicClassStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum StudentEnrollmentStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  WITHDRAWN
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum LessonContentType {
+  TEXT
+  VIDEO
+  PDF
+  LINK
+  LIVE
+}
+
 model User {
   id           String        @id @default(cuid())
   email        String        @unique
@@ -143,6 +177,14 @@ model User {
   guardianLinks GuardianStudentLink[] @relation("GuardianLinks")
   studentLinks GuardianStudentLink[] @relation("StudentLinks")
   createdTerritories Territory[] @relation("TerritoryCreator")
+  createdClasses AcademicClass[] @relation("ClassCreator")
+  studentEnrollments StudentEnrollment[] @relation("EnrolledStudent")
+  createdEnrollments StudentEnrollment[] @relation("EnrollmentCreator")
+  teachingAssignments TeacherClassAssignment[] @relation("AssignedTeacher")
+  assignedClassTeachers TeacherClassAssignment[] @relation("TeacherAssignmentCreator")
+  createdCourses Course[] @relation("CourseCreator")
+  attendanceMarked AttendanceRecord[] @relation("AttendanceMarker")
+  createdLessons CourseLesson[] @relation("LessonCreator")
   auditEvents  AuditEvent[]  @relation("AuditActor")
 
   @@index([role, status])
@@ -320,4 +362,124 @@ model GuardianStudentLink {
   @@unique([guardianId, studentId])
   @@index([guardianId, status])
   @@index([studentId, status])
+}
+
+
+model AcademicClass {
+  id             String              @id @default(cuid())
+  organizationId String
+  branchId       String?
+  name           String
+  code           String
+  gradeLevel     String?
+  section        String?
+  academicYear   String
+  status         AcademicClassStatus @default(ACTIVE)
+  createdById    String
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch         OrganizationBranch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  createdBy      User                @relation("ClassCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  enrollments    StudentEnrollment[]
+  teachers       TeacherClassAssignment[]
+  courses        Course[]
+  attendance     AttendanceRecord[]
+
+  @@unique([organizationId, code, academicYear])
+  @@index([organizationId, branchId, status])
+  @@index([organizationId, academicYear, gradeLevel, section])
+}
+
+model StudentEnrollment {
+  id          String                   @id @default(cuid())
+  classId     String
+  studentId   String
+  status      StudentEnrollmentStatus  @default(ACTIVE)
+  enrolledAt  DateTime                 @default(now())
+  withdrawnAt DateTime?
+  createdById String
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+  academicClass AcademicClass           @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student     User                     @relation("EnrolledStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  createdBy   User                     @relation("EnrollmentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([classId, studentId])
+  @@index([studentId, status])
+  @@index([classId, status])
+}
+
+model TeacherClassAssignment {
+  id          String        @id @default(cuid())
+  classId     String
+  teacherId   String
+  assignedById String
+  createdAt   DateTime      @default(now())
+  academicClass AcademicClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  teacher     User          @relation("AssignedTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
+  assignedBy  User          @relation("TeacherAssignmentCreator", fields: [assignedById], references: [id], onDelete: Restrict)
+
+  @@unique([classId, teacherId])
+  @@index([teacherId, classId])
+}
+
+model Course {
+  id             String       @id @default(cuid())
+  organizationId String
+  branchId       String?
+  classId        String?
+  title          String
+  description    String       @default("")
+  status         CourseStatus @default(DRAFT)
+  createdById    String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch         OrganizationBranch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  academicClass AcademicClass? @relation(fields: [classId], references: [id], onDelete: SetNull)
+  createdBy      User         @relation("CourseCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  lessons        CourseLesson[]
+
+  @@index([organizationId, branchId, status])
+  @@index([classId, status])
+  @@index([createdById, status])
+}
+
+model CourseLesson {
+  id          String            @id @default(cuid())
+  courseId    String
+  title       String
+  description String            @default("")
+  contentType LessonContentType @default(TEXT)
+  contentText String            @default("")
+  contentUrl  String?
+  sortOrder   Int               @default(0)
+  published   Boolean           @default(false)
+  createdById String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  course      Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdBy   User              @relation("LessonCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([courseId, published, sortOrder])
+}
+
+model AttendanceRecord {
+  id          String           @id @default(cuid())
+  classId     String
+  studentId   String
+  date        DateTime         @db.Date
+  status      AttendanceStatus
+  note        String           @default("")
+  markedById  String
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  academicClass AcademicClass  @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student     User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  markedBy    User             @relation("AttendanceMarker", fields: [markedById], references: [id], onDelete: Restrict)
+
+  @@unique([classId, studentId, date])
+  @@index([classId, date])
+  @@index([studentId, date])
 }
