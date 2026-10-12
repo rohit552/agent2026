@@ -134,6 +134,8 @@ test("registration, activation, session revocation and lead workflow", {
     body: JSON.stringify({ profileType: "SCHOOL_STUDENT", scopeType: "SELF", isDefault: true })
   });
   assert.equal(studentRole.status, 201);
+  const studentRoleData = (await studentRole.json()).data;
+  const studentRoleAssignmentId = studentRoleData.assignment.id;
 
   const teacherRole = await fetch(`${base}/api/v1/admin/users/${userId}/profile-roles`, {
     method: "POST",
@@ -175,7 +177,7 @@ test("registration, activation, session revocation and lead workflow", {
     body: JSON.stringify({ name: "CI North Branch", code: `N-${suffix.slice(0,8)}`, slug: `north-${suffix.slice(0,8)}` })
   });
   assert.equal(branchResponse.status, 201);
-  branchId = (await branchResponse.clone().json()).data.branch.id;
+  branchId = (await branchResponse.json()).data.branch.id;
 
   const scopedBranches = await fetch(`${base}/api/v1/admin/organizations/${organizationId}/branches`, {
     headers: { Authorization: `Bearer ${session.accessToken}`, "X-SkillHeed-Profile-Id": teacherAssignmentId }
