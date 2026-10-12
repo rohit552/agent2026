@@ -9,6 +9,7 @@ const modules = [
   ["📥", "Website enquiries", "leads"],
   ["📚", "Learning", "learning"],
   ["📝", "Assessments", "assessments"],
+  ["📊", "Assessment analytics", "analytics"],
   ["↗", "Hire", "hire"],
   ["🤝", "Partners & sales", "partners"],
   ["⚙", "Operations", "operations"]
@@ -36,6 +37,12 @@ function App() {
   const [assessmentAttempts, setAssessmentAttempts] = useState([]);
   const [selectedAttemptDetail, setSelectedAttemptDetail] = useState(null);
   const [assessmentError, setAssessmentError] = useState("");
+  const [analyticsOverview, setAnalyticsOverview] = useState(null);
+  const [analyticsDetail, setAnalyticsDetail] = useState(null);
+  const [analyticsAssessmentId, setAnalyticsAssessmentId] = useState("");
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState("");
+  const [analyticsFilters, setAnalyticsFilters] = useState({ organizationId: "", classId: "", from: "", to: "" });
   const [assessmentCreateForm, setAssessmentCreateForm] = useState({ organizationId: "", classId: "", title: "", description: "", instructions: "", timeLimitSeconds: "900", maxAttempts: "1" });
   const [questionForm, setQuestionForm] = useState({ prompt: "", questionType: "SINGLE_CHOICE", options: "a|Option A\nb|Option B", correctAnswers: "a", explanation: "", points: "1" });
   const [manualGradeValues, setManualGradeValues] = useState({});
@@ -510,6 +517,53 @@ function App() {
     }
   }
 
+
+  async function loadAssessmentAnalytics(event) {
+    event?.preventDefault?.();
+    setAnalyticsLoading(true);
+    setAnalyticsError("");
+    try {
+      const params = new URLSearchParams();
+      for (const [key, value] of Object.entries(analyticsFilters)) {
+        if (value) params.set(key, value);
+      }
+      const response = await apiRequest(`/api/v1/assessment-analytics/overview${params.toString() ? `?${params.toString()}` : ""}`, { token });
+      setAnalyticsOverview(response.data);
+      const currentId = analyticsAssessmentId && response.data.assessments.some(item => item.id === analyticsAssessmentId)
+        ? analyticsAssessmentId
+        : response.data.assessments[0]?.id ?? "";
+      setAnalyticsAssessmentId(currentId);
+      if (currentId) {
+        const detail = await apiRequest(`/api/v1/assessment-analytics/assessments/${currentId}`, { token });
+        setAnalyticsDetail(detail.data);
+      } else {
+        setAnalyticsDetail(null);
+      }
+    } catch (err) {
+      setAnalyticsError(err.message || "Could not load assessment analytics.");
+      setAnalyticsOverview(null);
+      setAnalyticsDetail(null);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }
+
+  async function openAnalyticsAssessment(assessmentId) {
+    setAnalyticsAssessmentId(assessmentId);
+    setAnalyticsError("");
+    if (!assessmentId) {
+      setAnalyticsDetail(null);
+      return;
+    }
+    try {
+      const response = await apiRequest(`/api/v1/assessment-analytics/assessments/${assessmentId}`, { token });
+      setAnalyticsDetail(response.data);
+    } catch (err) {
+      setAnalyticsError(err.message || "Could not load this assessment report.");
+      setAnalyticsDetail(null);
+    }
+  }
+
   async function updateUserStatus(target, status) {
     setBusyId(target.id); setActionMessage(""); setError("");
     try {
@@ -556,7 +610,7 @@ function App() {
       <header className="page-head"><div><span className="kicker">SKILLHEED OPERATIONS</span><h1>{view === "overview" ? `Good to see you, ${user.fullName?.split(" ")[0]}.` : modules.find(m => m[2] === view)?.[1] || "Workspace"}</h1><p>Secure operations workspace for SkillHeed platform administrators.</p></div><div className="header-actions"><span className="signed">● API session active</span><button className="secondary" onClick={() => loadDashboard(token).catch(e => setActionMessage(e.message))}>Refresh data</button><button className="secondary" onClick={signOut}>Sign out</button></div></header>
       <section className="notice"><b>Administrator access</b><span>Changes are checked by the API and important account/enquiry status changes are written to the audit log.</span></section>
       {actionMessage && <p className="action-message" role="status">{actionMessage}</p>}
-      {view === "overview" && <><section className="stat-grid"><article><span>Total users</span><strong>{overview?.users ?? "—"}</strong><small>Registered platform accounts</small></article><article><span>Active accounts</span><strong>{overview?.activeUsers ?? "—"}</strong><small>Accounts currently active</small></article><article><span>Pending verification</span><strong>{overview?.pendingUsers ?? "—"}</strong><small>Awaiting review or verification</small></article><article><span>Open enquiries</span><strong>{overview?.openLeads ?? "—"}</strong><small>{overview?.leads ?? "—"} total · {overview?.institutions ?? "—"} institutions</small></article></section><section className="modules"><div className="module-head"><div><h2>Management workspaces</h2><p>Use a workspace to review live records from the API.</p></div><span className="pill">Connected</span></div><div className="module-grid">{modules.map(([icon,name,key])=><button className="module-card" onClick={() => setView(key)} key={key}><div className="module-icon">{icon}</div><h3>{name}</h3><p>{({users:"Account records and activation workflow",institutions:"Registered organizations and branches",leads:"Website leads and follow-up status",learning:"Academic classes, student enrolments, teacher assignments, attendance and course delivery",assessments:"Timed quizzes, answer-key protection, automatic scoring and written-response grading",hire:"Jobs and employers — upcoming integration",partners:"Partners and territory workflows — upcoming integration",operations:"Guardian/student link verification and operations workflows"})[key]}</p><span className={["users","institutions","leads","operations","learning","assessments"].includes(key)?"available":"planned"}>{["users","institutions","leads","operations","learning","assessments"].includes(key)?"API connected":"Integration planned"}</span></button>)}</div></section></>}
+      {view === "overview" && <><section className="stat-grid"><article><span>Total users</span><strong>{overview?.users ?? "—"}</strong><small>Registered platform accounts</small></article><article><span>Active accounts</span><strong>{overview?.activeUsers ?? "—"}</strong><small>Accounts currently active</small></article><article><span>Pending verification</span><strong>{overview?.pendingUsers ?? "—"}</strong><small>Awaiting review or verification</small></article><article><span>Open enquiries</span><strong>{overview?.openLeads ?? "—"}</strong><small>{overview?.leads ?? "—"} total · {overview?.institutions ?? "—"} institutions</small></article></section><section className="modules"><div className="module-head"><div><h2>Management workspaces</h2><p>Use a workspace to review live records from the API.</p></div><span className="pill">Connected</span></div><div className="module-grid">{modules.map(([icon,name,key])=><button className="module-card" onClick={() => setView(key)} key={key}><div className="module-icon">{icon}</div><h3>{name}</h3><p>{({users:"Account records and activation workflow",institutions:"Registered organizations and branches",leads:"Website leads and follow-up status",learning:"Academic classes, student enrolments, teacher assignments, attendance and course delivery",assessments:"Timed quizzes, answer-key protection, automatic scoring and written-response grading",analytics:"Assessment performance, completion, score ranges and question-level outcomes",hire:"Jobs and employers — upcoming integration",partners:"Partners and territory workflows — upcoming integration",operations:"Guardian/student link verification and operations workflows"})[key]}</p><span className={["users","institutions","leads","operations","learning","assessments","analytics"].includes(key)?"available":"planned"}>{["users","institutions","leads","operations","learning","assessments","analytics"].includes(key)?"API connected":"Integration planned"}</span></button>)}</div></section></>}
 
 
 
@@ -675,7 +729,7 @@ function App() {
 
       {view === "operations" && <section className="data-panel"><div className="panel-head"><div><h2>Guardian / student link review</h2><p>Requests remain pending until an authorized review is completed. Approval and revocation are audited.</p></div><button className="secondary" onClick={() => loadDashboard(token).catch(e => setActionMessage(e.message))}>Reload</button></div><div className="table-wrap"><table><thead><tr><th>Parent / guardian</th><th>Student</th><th>Requested</th><th>Consent / status</th></tr></thead><tbody>{guardianLinks.map(link=><tr key={link.id}><td><strong>{link.guardian?.fullName || "Unknown guardian"}</strong><small>{link.guardian?.email || "—"}</small></td><td><strong>{link.student?.fullName || "Unknown student"}</strong><small>{link.student?.email || "—"}</small></td><td>{fmtDate(link.createdAt)}</td><td><select aria-label={"Guardian link status for "+(link.guardian?.fullName || "guardian")} value={link.status} disabled={busyId===link.id} onChange={event=>updateGuardianLinkStatus(link,event.target.value)}>{["PENDING","APPROVED","REVOKED"].map(status=><option key={status} value={status}>{status}</option>)}</select>{link.consentAt && <small className="consent-date">Approved {fmtDate(link.consentAt)}</small>}</td></tr>)}</tbody></table>{guardianLinks.length===0&&<p className="empty">There are no guardian/student link requests.</p>}</div></section>}
 
-      {!["overview","users","leads","institutions","operations","learning","assessments"].includes(view) && <section className="data-panel placeholder"><div className="module-icon">◈</div><h2>{modules.find(m=>m[2]===view)?.[1] || "Workspace"}</h2><p>This workspace is planned. Add its data model, authorization policies, CRUD API, tests and operational workflows before using it with live records.</p><button className="secondary" onClick={()=>setView("overview")}>Back to overview</button></section>}
+      {!["overview","users","leads","institutions","operations","learning","assessments","analytics"].includes(view) && <section className="data-panel placeholder"><div className="module-icon">◈</div><h2>{modules.find(m=>m[2]===view)?.[1] || "Workspace"}</h2><p>This workspace is planned. Add its data model, authorization policies, CRUD API, tests and operational workflows before using it with live records.</p><button className="secondary" onClick={()=>setView("overview")}>Back to overview</button></section>}
       <section className="security"><div><h3>Security and access</h3><p>The API validates the active account and role on each request. Keep secrets off the frontend, limit access to this admin hostname, and enable MFA before production launch.</p></div><span>RBAC</span></section>
     </main>
 
